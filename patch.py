@@ -21,7 +21,10 @@ from itertools import islice
 from pyparsing import Group, Optional, Regex, Suppress, Word, ZeroOrMore
 from rdflib import BNode, Literal, RDF, URIRef
 
-COMMAND = Word("ACDR", exact=1)
+COMMAND = Regex("A(d(d)?)?") ^ \
+          Regex("D(e(l(e(t(e)?)?)?)?)?") ^ \
+          Regex("C(l(e(a(r)?)?)?)?") ^ \
+          Regex("R(e(p(l(a(c(e)?)?)?)?)?)?")
 IRI = Regex(r"<[^> \t\r\n]*>") # TODO improve that
 BNODE = Regex(r"_:[a-zA-Z_][-0-9a-zA-Z_.]*") # TODO improve that?
 LITERAL = Group(Regex(r'"([^"]|\\")*"')
@@ -227,7 +230,7 @@ class Patch(object):
                 raise PatchException("No predicate to repeat",
                                      self._lineno)
             endsWithIndices = is_indices(self._predicate[-1])
-            if line[0] != "R":
+            if line[0][0] != "R":
                 if endsWithIndices:
                     raise PatchException("Indices not supported by %s"
                                          % line[0], self._lineno)
@@ -236,14 +239,14 @@ class Patch(object):
                                          % line[0], self._lineno)
             convert_single_indices(self._predicate)
 
-            if line[0] == "A":
+            if line[0][0] == "A":
                 self._apply_add(line, graph)
-            elif line[0] == "D":
+            elif line[0][0] == "D":
                 self._apply_del(line, graph)
-            elif line[0] == "C":
+            elif line[0][0] == "C":
                 self._apply_clear(line, graph)
             else:
-                assert line[0] == "R", line[0]
+                assert line[0][0] == "R", line[0]
                 if is_slice(self._predicate[-1]):
                     self._apply_repl_slice(line, graph)
                 else:

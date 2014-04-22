@@ -67,63 +67,79 @@ def P(data):
 
 def test_parse_line():
     for line, exp in {
+            'Add <tag:s> <tag:p> <tag:o> .':
+                ['Add', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
+            'Add <tag:s> <tag:p> "foo" .':
+                ['Add', '<tag:s>', ['<tag:p>'], ['"foo"', None, None], None],
+            'Add <tag:s> <tag:p> "foo"@en .':
+                ['Add', '<tag:s>', ['<tag:p>'], ['"foo"', "en", None], None],
+            'Add <tag:s> <tag:p> "foo"^^<tag:t> .':
+                ['Add', '<tag:s>', ['<tag:p>'], ['"foo"', None, "<tag:t>"],
+                 None],
+            'Add R <tag:p> <tag:o> .':
+                ['Add', 'R', ['<tag:p>'], '<tag:o>', None],
+            'Add R R <tag:o> .':
+                ['Add', 'R', 'R', '<tag:o>', None],
+            'Add <tag:s> <tag:p> <tag:o> <tag:g>.':
+                ['Add', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
+            'Add <tag:s> <tag:p> <tag:o> R.':
+                ['Add', '<tag:s>', ['<tag:p>'], '<tag:o>', 'R'],
+            'Add R <tag:p> <tag:o> R.':
+                ['Add', 'R', ['<tag:p>'], '<tag:o>', 'R'],
+            'Add R R <tag:o> R.':
+                ['Add', 'R', 'R', '<tag:o>', 'R'],
+            'Add <tag:s> -<tag:p> <tag:o> .':
+                ['Add', '<tag:s>', [['-', '<tag:p>']], '<tag:o>', None],
+            'Add <tag:s> <tag:p>/<tag:q> <tag:o> .':
+                ['Add', '<tag:s>', ['<tag:p>', '<tag:q>'], '<tag:o>', None],
+            'Add <tag:s> <tag:p>/-<tag:q> <tag:o> .':
+                ['Add', '<tag:s>', ['<tag:p>', ['-', '<tag:q>']], '<tag:o>',
+                 None],
+            'Ad <tag:s> <tag:p> <tag:o> .':
+                ['Ad', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
             'A <tag:s> <tag:p> <tag:o> .':
                 ['A', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'A <tag:s> <tag:p> "foo" .':
-                ['A', '<tag:s>', ['<tag:p>'], ['"foo"', None, None], None],
-            'A <tag:s> <tag:p> "foo"@en .':
-                ['A', '<tag:s>', ['<tag:p>'], ['"foo"', "en", None], None],
-            'A <tag:s> <tag:p> "foo"^^<tag:t> .':
-                ['A', '<tag:s>', ['<tag:p>'], ['"foo"', None, "<tag:t>"],
-                 None],
-            'A R <tag:p> <tag:o> .':
-                ['A', 'R', ['<tag:p>'], '<tag:o>', None],
-            'A R R <tag:o> .':
-                ['A', 'R', 'R', '<tag:o>', None],
-            'A <tag:s> <tag:p> <tag:o> <tag:g>.':
-                ['A', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
-            'A <tag:s> <tag:p> <tag:o> R.':
-                ['A', '<tag:s>', ['<tag:p>'], '<tag:o>', 'R'],
-            'A R <tag:p> <tag:o> R.':
-                ['A', 'R', ['<tag:p>'], '<tag:o>', 'R'],
-            'A R R <tag:o> R.':
-                ['A', 'R', 'R', '<tag:o>', 'R'],
-            'A <tag:s> -<tag:p> <tag:o> .':
-                ['A', '<tag:s>', [['-', '<tag:p>']], '<tag:o>', None],
-            'A <tag:s> <tag:p>/<tag:q> <tag:o> .':
-                ['A', '<tag:s>', ['<tag:p>', '<tag:q>'], '<tag:o>', None],
-            'A <tag:s> <tag:p>/-<tag:q> <tag:o> .':
-                ['A', '<tag:s>', ['<tag:p>', ['-', '<tag:q>']], '<tag:o>',
-                 None],
+            'Delete <tag:s> <tag:p> <tag:o>.':
+                ['Delete', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
+            'Delete <tag:s> <tag:p> <tag:o> <tag:g>.':
+                ['Delete', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
+            'Del <tag:s> <tag:p> <tag:o>.':
+                ['Del', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
             'D <tag:s> <tag:p> <tag:o>.':
                 ['D', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'D <tag:s> <tag:p> <tag:o> <tag:g>.':
-                ['D', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
+            'Replace <tag:s> <tag:p> <tag:o>.':
+                ['Replace', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
+            'Replace <tag:s> <tag:p> <tag:o> <tag:g>.':
+                ['Replace', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
+            'Replace <tag:s> <tag:p>[1] <tag:o>.':
+                ['Replace', '<tag:s>', ['<tag:p>', ['[', '1']], '<tag:o>', None],
+            'Replace <tag:s> <tag:p>[0:] ( <tag:o> "foo" _:bar ).':
+                ['Replace', '<tag:s>', ['<tag:p>', ['[', '0', ':']],
+                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
+            'Replace <tag:s> <tag:p>[0:2] ( <tag:o> "foo" _:bar ).':
+                ['Replace', '<tag:s>', ['<tag:p>', ['[', '0', ':', '2']],
+                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
+            'Replace <tag:s> <tag:p>[:2] ( <tag:o> "foo" _:bar ).':
+                ['Replace', '<tag:s>', ['<tag:p>', ['[', ':', '2']],
+                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
+            'Replace <tag:s> <tag:p>[:] ( <tag:o> "foo" _:bar ).':
+                ['Replace', '<tag:s>', ['<tag:p>', ['[', ':']],
+                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
+            'Replace <tag:s> <tag:p>[] ( <tag:o> "foo" _:bar ).':
+                ['Replace', '<tag:s>', ['<tag:p>', ['[']],
+                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
+            'Repl <tag:s> <tag:p> <tag:o>.':
+                ['Repl', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
             'R <tag:s> <tag:p> <tag:o>.':
                 ['R', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'R <tag:s> <tag:p> <tag:o> <tag:g>.':
-                ['R', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
-            'R <tag:s> <tag:p>[1] <tag:o>.':
-                ['R', '<tag:s>', ['<tag:p>', ['[', '1']], '<tag:o>', None],
-            'R <tag:s> <tag:p>[0:] ( <tag:o> "foo" _:bar ).':
-                ['R', '<tag:s>', ['<tag:p>', ['[', '0', ':']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'R <tag:s> <tag:p>[0:2] ( <tag:o> "foo" _:bar ).':
-                ['R', '<tag:s>', ['<tag:p>', ['[', '0', ':', '2']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'R <tag:s> <tag:p>[:2] ( <tag:o> "foo" _:bar ).':
-                ['R', '<tag:s>', ['<tag:p>', ['[', ':', '2']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'R <tag:s> <tag:p>[:] ( <tag:o> "foo" _:bar ).':
-                ['R', '<tag:s>', ['<tag:p>', ['[', ':']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'R <tag:s> <tag:p>[] ( <tag:o> "foo" _:bar ).':
-                ['R', '<tag:s>', ['<tag:p>', ['[']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
+            'Clear <tag:s> <tag:p>.':
+                ['Clear', '<tag:s>', ['<tag:p>'], None],
+            'Clear <tag:s> <tag:p> <tag:g>.':
+                ['Clear', '<tag:s>', ['<tag:p>'], '<tag:g>', None],
+            'Cl <tag:s> <tag:p>.':
+                ['Cl', '<tag:s>', ['<tag:p>'], None],
             'C <tag:s> <tag:p>.':
                 ['C', '<tag:s>', ['<tag:p>'], None],
-            'C <tag:s> <tag:p> <tag:g>.':
-                ['C', '<tag:s>', ['<tag:p>'], '<tag:g>', None],
         }.iteritems():
         try:
             got = ROW.parseString(line, True).asList()
@@ -132,7 +148,7 @@ def test_parse_line():
             assert False, "%s\n -> %s" % (line, ex)
 
 def test_add_simple():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
           """ <http://xmlns.com/foaf/0.1/Person> .""")
     exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")
@@ -142,7 +158,7 @@ def test_add_simple():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_add_simple_among_others():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ <http://xmlns.com/foaf/0.1/knows>"""
           """ <http://danbri.org/foaf.rdf#danbri> .""")
     exp = G(INITIAL + """<http://champin.net/#pa>"""
@@ -154,7 +170,7 @@ def test_add_simple_among_others():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_add_simple_existing():
-    p = P("""A <http://champin.net/#pa> """
+    p = P("""Add <http://champin.net/#pa> """
           """ <http://xmlns.com/foaf/0.1/name> """
           """ "Pierre-Antoine Champin" .""")
     exp = G(INITIAL)
@@ -164,7 +180,7 @@ def test_add_simple_existing():
     assert isomorphic(got, exp), got.serialize(format="turtle")
     
 def test_add_inverse():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ -<http://xmlns.com/foaf/0.1/knows>"""
           """ <http://danbri.org/foaf.rdf#danbri> .""")
     exp = G(INITIAL + """
@@ -178,7 +194,7 @@ def test_add_inverse():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_add_path():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ -<http://xmlns.com/foaf/0.1/member>"""
           """ /<http://example.org/vocab#famousMember>"""
           """ <http://johndoe.org/#me> .""")
@@ -190,7 +206,7 @@ def test_add_path():
     p.apply_to(got)
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ -<http://xmlns.com/foaf/0.1/member>"""
           """ /<http://example.org/vocab#famousMember>"""
           """ /<http://xmlns.com/foaf/0.1/name>"""
@@ -204,7 +220,7 @@ def test_add_path():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_add_path_existing():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ -<http://xmlns.com/foaf/0.1/member>"""
           """ /<http://xmlns.com/foaf/0.1/name>"""
           """ "Université Claude Bernard Lyon 1" .""")
@@ -215,7 +231,7 @@ def test_add_path_existing():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_add_literal_as_subject():
-    p = P("""A "Andy Seaborne" """
+    p = P("""Add "Andy Seaborne" """
           """ -<http://xmlns.com/foaf/0.1/name>"""
           """ /<http://xmlns.com/foaf/0.1/nick>"""
           """ "AndyS" .""")
@@ -227,7 +243,7 @@ def test_add_literal_as_subject():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_add_path_with_index():
-    p = P("""A <http://champin.net/#pa> """
+    p = P("""Add <http://champin.net/#pa> """
           """ <http://example.org/vocab#prefLang>[1]"""
           """ /-<http://example.org/vocab#speaksFluently>"""
           """ <http://champin.net/#pa> .""")
@@ -240,7 +256,7 @@ def test_add_path_with_index():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_del_simple():
-    p = P("""D <http://champin.net/#pa>"""
+    p = P("""Delete <http://champin.net/#pa>"""
           """ <http://xmlns.com/foaf/0.1/name> """
           """ "Pierre-Antoine Champin" .""")
     exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
@@ -250,7 +266,7 @@ def test_del_simple():
     assert isomorphic(got, exp), got.serialize(format="turtle")
     
 def test_del_simple_inexisting():
-    p = P("""D <http://champin.net/#pa>"""
+    p = P("""Delete <http://champin.net/#pa>"""
           """ <http://xmlns.com/foaf/0.1/name> """
           """ "PAC" .""")
     exp = G(INITIAL)
@@ -260,7 +276,7 @@ def test_del_simple_inexisting():
     assert isomorphic(got, exp), got.serialize(format="turtle")
     
 def test_del_path():
-    p = P("""D <http://champin.net/#pa>"""
+    p = P("""Delete <http://champin.net/#pa>"""
           """ -<http://xmlns.com/foaf/0.1/member> """
           """ /<http://xmlns.com/foaf/0.1/name> """
           """ "Université Claude Bernard Lyon 1" .""")
@@ -272,7 +288,7 @@ def test_del_path():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_del_path_inexisting():
-    p = P("""D <http://champin.net/#pa>"""
+    p = P("""Delete <http://champin.net/#pa>"""
           """ -<http://xmlns.com/foaf/0.1/member> """
           """ /<http://xmlns.com/foaf/0.1/name> """
           """ "UCBL" .""")
@@ -283,7 +299,7 @@ def test_del_path_inexisting():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_clear_simple():
-    p = P("""C <http://champin.net/#pa> """
+    p = P("""Clear <http://champin.net/#pa> """
           """ <http://xmlns.com/foaf/0.1/knows> .""")
     exp = G("""
         @prefix v: <http://example.org/vocab#> .
@@ -310,7 +326,7 @@ def test_clear_simple():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_clear_simple_inexisting():
-    p = P("""C <http://champin.net/#pa> """
+    p = P("""Clear <http://champin.net/#pa> """
           """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> .""")
     exp = G(INITIAL)
 
@@ -319,7 +335,7 @@ def test_clear_simple_inexisting():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_clear_path():
-    p = P("""C <http://champin.net/#pa> """
+    p = P("""Clear <http://champin.net/#pa> """
           """ -<http://xmlns.com/foaf/0.1/member> """
           """ /<http://xmlns.com/foaf/0.1/name> """
           """ .""")
@@ -331,7 +347,7 @@ def test_clear_path():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_simple():
-    p = P("""R <http://champin.net/#pa> """
+    p = P("""Replace <http://champin.net/#pa> """
           """ <http://xmlns.com/foaf/0.1/name> """
           """ "PAC" .""")
     exp = G(INITIAL.replace('"Pierre-Antoine Champin"', '"PAC"'))
@@ -341,7 +357,7 @@ def test_repl_simple():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_simple_existing():
-    p = P("""R <http://champin.net/#pa> """
+    p = P("""Replace <http://champin.net/#pa> """
           """ <http://xmlns.com/foaf/0.1/name> """
           """ "Pierre-Antoine Champin" .""")
     exp = G(INITIAL)
@@ -351,7 +367,7 @@ def test_repl_simple_existing():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_simple_inexisting():
-    p = P("""R <http://champin.net/#pa> """
+    p = P("""Replace <http://champin.net/#pa> """
           """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
           """ <http://xmlns.com/foaf/0.1/Person> .""")
     exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")
@@ -361,7 +377,7 @@ def test_repl_simple_inexisting():
     assert isomorphic(got, exp), got.serialize(format="turtle")
     
 def test_repl_path():
-    p = P("""R <http://champin.net/#pa> """
+    p = P("""Replace <http://champin.net/#pa> """
           """ -<http://xmlns.com/foaf/0.1/member> """
           """ /<http://xmlns.com/foaf/0.1/name> """
           """ "UCBL" .""")
@@ -372,7 +388,7 @@ def test_repl_path():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_path_existing():
-    p = P("""R <http://champin.net/#pa> """
+    p = P("""Replace <http://champin.net/#pa> """
           """ -<http://xmlns.com/foaf/0.1/member> """
           """ /<http://xmlns.com/foaf/0.1/name> """
           """ "Université Claude Bernard Lyon 1" .""")
@@ -383,7 +399,7 @@ def test_repl_path_existing():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_path_inexisting():
-    p = P("""R <http://champin.net/#pa>"""
+    p = P("""Replace <http://champin.net/#pa>"""
           """ -<http://xmlns.com/foaf/0.1/member>"""
           """ /<http://example.org/vocab#famousMember>"""
           """ <http://johndoe.org/#me> .""")
@@ -396,7 +412,7 @@ def test_repl_path_inexisting():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_index():
-    p = P("""R <http://champin.net/#pa>"""
+    p = P("""Replace <http://champin.net/#pa>"""
           """ <http://example.org/vocab#prefLang>[1]"""
           """ "en-UK" .""")
     exp = G(INITIAL.replace('"en"', '"en-UK"'))
@@ -406,7 +422,7 @@ def test_repl_index():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_slice():
-    p = P("""R <http://champin.net/#pa>"""
+    p = P("""Replace <http://champin.net/#pa>"""
           """ <http://example.org/vocab#prefLang>[1:]"""
           """ ("en-UK" "en-US" "en") .""")
     exp = G(INITIAL.replace('"en"', '"en-UK" "en-US" "en"'))
@@ -416,7 +432,7 @@ def test_repl_slice():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repl_whole_slice():
-    p = P("""R <http://champin.net/#pa>"""
+    p = P("""Replace <http://champin.net/#pa>"""
           """ <http://example.org/vocab#prefLang>[:]"""
           """ () .""")
     exp = G(INITIAL.replace(
@@ -428,10 +444,10 @@ def test_repl_whole_slice():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repeat_subject():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
           """ <http://xmlns.com/foaf/0.1/Person> .\n"""
-          """A R <http://xmlns.com/foaf/0.1/nick> "pchampin" .""")
+          """Add R <http://xmlns.com/foaf/0.1/nick> "pchampin" .""")
     exp = G(INITIAL + """
         <http://champin.net/#pa> a f:Person; f:nick "pchampin" .
     """)
@@ -441,10 +457,10 @@ def test_repeat_subject():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repeat_predicate():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
           """ <http://xmlns.com/foaf/0.1/Person> .\n"""
-          """A <http://champin.net/#pa> R"""
+          """Add <http://champin.net/#pa> R"""
           """ <http://xmlns.com/foaf/0.1/Agent> .""")
     exp = G(INITIAL + """
         <http://champin.net/#pa> a f:Person, f:Agent .
@@ -455,9 +471,9 @@ def test_repeat_predicate():
     assert isomorphic(got, exp), got.serialize(format="turtle")
 
 def test_repeat_object():
-    p = P("""A <http://champin.net/#pa>"""
+    p = P("""Add <http://champin.net/#pa>"""
           """ <http://xmlns.com/foaf/0.1/nick> "pchampin" .\n"""
-          """A <http://champin.net/#pa>"""
+          """Add <http://champin.net/#pa>"""
           """ <http://example.org/vocab#login> R .""")
     exp = G(INITIAL + """
         <http://champin.net/#pa> f:nick "pchampin" ; v:login "pchampin" .
