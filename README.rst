@@ -22,7 +22,7 @@ which should be equivalent to this::
     Bind ::= Var Path
     Add ::= Subject Predicate ( Object | List )
     Delete ::= Subject Predicate Object
-    Replace ::= Subject Slice List
+    Replace ::= Subject Predicate Slice List
 
     Subject ::= IRIREF | PrefixedName | BLANK_NODE_LABEL | Var
     Predicate ::= IRIREF | PrefixedName
