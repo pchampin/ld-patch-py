@@ -21,13 +21,14 @@ from os.path import dirname
 sys.path.append(dirname(dirname(__file__)))
 
 from cStringIO import StringIO
+from nose.tools import assert_raises, assert_set_equal, eq_
 from pyparsing import ParseException
-from rdflib import Graph
+from rdflib import Graph, Namespace, RDF
 from rdflib.compare import isomorphic
+from sets import ImmutableSet
 from unittest import skip
 
-from patch import ROW, Patch
-
+from patch import *
 
 INITIAL = """
 @prefix v: <http://example.org/vocab#> .
@@ -35,18 +36,21 @@ INITIAL = """
 
 <http://champin.net/#pa>
     f:name "Pierre-Antoine Champin" ;
-    v:prefLang ( "fr" "en" ) ;
+    v:prefLang ( "fr" "en" "tlh" ) ;
     f:knows
         [
-            f:name "Andy Seaborne" ;
-            v:memberOf [
-                f:name "Epimorphic Ltd" ;
+            f:name "Alexandre Bertails" ;
+            f:holdsAccount [
+                f:accountName "bertails" ;
+                f:accountServiceHomepage <http://twitter.com/>
             ];
+            v:prefLang ( "en" "fr" ) ;
         ],
         [
-            f:name "Sandro Hawke" ;
-            v:memberOf [
-                f:name "World Wide Web Consortium" ;
+            f:name "Andrei Sambra" ;
+            f:holdsAccount [
+                f:accountName "therealdeiu" ;
+                f:accountServiceHomepage <http://twitter.com/>
             ];
         ];
 .
@@ -56,437 +60,477 @@ _:ucbl
     f:member <http://champin.net/#pa> .
 """
 
+VOCAB = Namespace("http://example.org/vocab#")
+FOAF = Namespace("http://xmlns.com/foaf/0.1/")
+PA = IRI("http://champin.net/#pa")
+
 def G(data):
     g = Graph()
     g.parse(data=data, format="turtle")
     return g
 
-def P(data):
-    return Patch(StringIO(data))
+V = Variable
+PN = PrefixedName
+
+class TestPatchEngine(object):
+    def setUp(self):
+        self.g = G(INITIAL)
+        self.e = PatchEngine(self.g,
+                             {"foaf": IRI(FOAF), "vocab": IRI(VOCAB)})
+        self.my_friends = { t[2] for t in self.g.triples((PA, FOAF.knows, None)) }
+        self.ucbl = self.g.value(None, FOAF.member, PA)
+
+    def tearDown(self):
+        self.e = None
+        self.g = None
+
+    # testing utility methods
+
+    def test_getnode_variable_unbound(self):
+        with assert_raises(UnboundVariableError):
+            self.e.get_node(V("foo"))
+
+    def test_getnode_variable(self):
+        self.e = PatchEngine(self.g, init_vars={V("x"): PA})
+        eq_(PA, self.e.get_node(V("x")))
+
+    def test_getnode_pname_undefined(self):
+        with assert_raises(UndefinedPrefixError):
+            self.e.get_node(PN("dc", "Person"))
+
+    def test_getnode_pname(self):
+        eq_(FOAF.Person, self.e.get_node(PN("foaf", "Person")))
+
+    def test_getnode_bnode_same_twice(self):
+        bnid = BNode()
+        created = self.e.get_node(bnid)
+        assert bnid is not created
+        assert created is self.e.get_node(bnid)
+
+    def test_getnode_bnode_different(self):
+        created1 = self.e.get_node(BNode())
+        created2 = self.e.get_node(BNode())
+        assert created1 != created2
+
+    def test_getnode_iri(self):
+        eq_(PA, self.e.get_node(PA))
+
+    def test_getnode_iri_absent(self):
+        eq_(VOCAB.foo, self.e.get_node(VOCAB.foo))
+
+    def test_getnode_literal(self):
+        txt = Literal("Pierre-Antoine Champin")
+        eq_(txt, self.e.get_node(txt))
+
+    def test_getnode_literal_absent(self):
+        txt = Literal("this text is not in the data")
+        eq_(txt, self.e.get_node(txt))
 
 
-def test_parse_line():
-    for line, exp in {
-            'Add <tag:s> <tag:p> <tag:o> .':
-                ['Add', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'Add <tag:s> <tag:p> "foo" .':
-                ['Add', '<tag:s>', ['<tag:p>'], ['"foo"', None, None], None],
-            'Add <tag:s> <tag:p> "foo"@en .':
-                ['Add', '<tag:s>', ['<tag:p>'], ['"foo"', "en", None], None],
-            'Add <tag:s> <tag:p> "foo"^^<tag:t> .':
-                ['Add', '<tag:s>', ['<tag:p>'], ['"foo"', None, "<tag:t>"],
-                 None],
-            'Add R <tag:p> <tag:o> .':
-                ['Add', 'R', ['<tag:p>'], '<tag:o>', None],
-            'Add R R <tag:o> .':
-                ['Add', 'R', 'R', '<tag:o>', None],
-            'Add <tag:s> <tag:p> <tag:o> <tag:g>.':
-                ['Add', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
-            'Add <tag:s> <tag:p> <tag:o> R.':
-                ['Add', '<tag:s>', ['<tag:p>'], '<tag:o>', 'R'],
-            'Add R <tag:p> <tag:o> R.':
-                ['Add', 'R', ['<tag:p>'], '<tag:o>', 'R'],
-            'Add R R <tag:o> R.':
-                ['Add', 'R', 'R', '<tag:o>', 'R'],
-            'Add <tag:s> -<tag:p> <tag:o> .':
-                ['Add', '<tag:s>', [['-', '<tag:p>']], '<tag:o>', None],
-            'Add <tag:s> <tag:p>/<tag:q> <tag:o> .':
-                ['Add', '<tag:s>', ['<tag:p>', '<tag:q>'], '<tag:o>', None],
-            'Add <tag:s> <tag:p>/-<tag:q> <tag:o> .':
-                ['Add', '<tag:s>', ['<tag:p>', ['-', '<tag:q>']], '<tag:o>',
-                 None],
-            'Ad <tag:s> <tag:p> <tag:o> .':
-                ['Ad', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'A <tag:s> <tag:p> <tag:o> .':
-                ['A', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'Delete <tag:s> <tag:p> <tag:o>.':
-                ['Delete', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'Delete <tag:s> <tag:p> <tag:o> <tag:g>.':
-                ['Delete', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
-            'Del <tag:s> <tag:p> <tag:o>.':
-                ['Del', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'D <tag:s> <tag:p> <tag:o>.':
-                ['D', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'Replace <tag:s> <tag:p> <tag:o>.':
-                ['Replace', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'Replace <tag:s> <tag:p> <tag:o> <tag:g>.':
-                ['Replace', '<tag:s>', ['<tag:p>'], '<tag:o>', '<tag:g>'],
-            'Replace <tag:s> <tag:p>[1] <tag:o>.':
-                ['Replace', '<tag:s>', ['<tag:p>', ['[', '1']], '<tag:o>', None],
-            'Replace <tag:s> <tag:p>[0:] ( <tag:o> "foo" _:bar ).':
-                ['Replace', '<tag:s>', ['<tag:p>', ['[', '0', ':']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'Replace <tag:s> <tag:p>[0:2] ( <tag:o> "foo" _:bar ).':
-                ['Replace', '<tag:s>', ['<tag:p>', ['[', '0', ':', '2']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'Replace <tag:s> <tag:p>[:2] ( <tag:o> "foo" _:bar ).':
-                ['Replace', '<tag:s>', ['<tag:p>', ['[', ':', '2']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'Replace <tag:s> <tag:p>[:] ( <tag:o> "foo" _:bar ).':
-                ['Replace', '<tag:s>', ['<tag:p>', ['[', ':']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'Replace <tag:s> <tag:p>[] ( <tag:o> "foo" _:bar ).':
-                ['Replace', '<tag:s>', ['<tag:p>', ['[']],
-                 ['(', '<tag:o>', ['"foo"', None, None], "_:bar"], None],
-            'Repl <tag:s> <tag:p> <tag:o>.':
-                ['Repl', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'R <tag:s> <tag:p> <tag:o>.':
-                ['R', '<tag:s>', ['<tag:p>'], '<tag:o>', None],
-            'Clear <tag:s> <tag:p>.':
-                ['Clear', '<tag:s>', ['<tag:p>'], None],
-            'Clear <tag:s> <tag:p> <tag:g>.':
-                ['Clear', '<tag:s>', ['<tag:p>'], '<tag:g>', None],
-            'Cl <tag:s> <tag:p>.':
-                ['Cl', '<tag:s>', ['<tag:p>'], None],
-            'C <tag:s> <tag:p>.':
-                ['C', '<tag:s>', ['<tag:p>'], None],
-        }.iteritems():
-        try:
-            got = ROW.parseString(line, True).asList()
-            assert got == exp, "%s\n -> %r" % (line, got)
-        except ParseException, ex:
-            assert False, "%s\n -> %s" % (line, ex)
+    def test_dopathstep_iri_one_start(self):
+        assert_set_equal(self.my_friends,
+                         self.e.do_path_step({PA}, FOAF.knows))
 
-def test_add_simple():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
-          """ <http://xmlns.com/foaf/0.1/Person> .""")
-    exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")
+    def test_dopathstep_iri_several_starts(self):
+        assert_set_equal({Literal("Alexandre Bertails"), Literal("Andrei Sambra")},
+                         self.e.do_path_step(self.my_friends, FOAF.name))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_dopathstep_iri_partial_match(self):
+        eq_(1, len(self.e.do_path_step(self.my_friends, VOCAB.prefLang)))
 
-def test_add_simple_among_others():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ <http://xmlns.com/foaf/0.1/knows>"""
-          """ <http://danbri.org/foaf.rdf#danbri> .""")
-    exp = G(INITIAL + """<http://champin.net/#pa>"""
-          """ <http://xmlns.com/foaf/0.1/knows>"""
-          """ <http://danbri.org/foaf.rdf#danbri> .""")
+    def test_dopathstep_pname_one_start(self):
+        assert_set_equal(self.my_friends,
+                         self.e.do_path_step({PA}, PN("foaf", "knows")))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_dopathstep_pname_several_starts(self):
+        assert_set_equal({Literal("Alexandre Bertails"), Literal("Andrei Sambra")},
+                         self.e.do_path_step(self.my_friends, PN("foaf", "name")))
 
-def test_add_simple_existing():
-    p = P("""Add <http://champin.net/#pa> """
-          """ <http://xmlns.com/foaf/0.1/name> """
-          """ "Pierre-Antoine Champin" .""")
-    exp = G(INITIAL)
+    def test_dopathstep_pname_partial_match(self):
+        eq_(1, len(self.e.do_path_step(self.my_friends, PN("vocab", "prefLang"))))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
-    
-def test_add_inverse():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ -<http://xmlns.com/foaf/0.1/knows>"""
-          """ <http://danbri.org/foaf.rdf#danbri> .""")
-    exp = G(INITIAL + """
-        <http://danbri.org/foaf.rdf#danbri>
-            <http://xmlns.com/foaf/0.1/knows>
-                <http://champin.net/#pa> .
-    """)
+    def test_dopathstep_inv_one_start(self):
+        assert_set_equal({self.ucbl},
+                          self.e.do_path_step({PA}, InvIRI(FOAF.member)))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_dopathstep_inv_several_starts(self):
+        assert_set_equal({PA},
+                         self.e.do_path_step(self.my_friends, InvIRI(FOAF.knows)))
 
-def test_add_path():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ -<http://xmlns.com/foaf/0.1/member>"""
-          """ /<http://example.org/vocab#famousMember>"""
-          """ <http://johndoe.org/#me> .""")
-    exp = G(INITIAL + """
-        _:ucbl v:famousMember <http://johndoe.org/#me> .
-    """)
+    def test_dopathstep_inv_partial_match(self):
+        assert_set_equal({self.ucbl},
+                         self.e.do_path_step(self.my_friends | {PA}, InvIRI(FOAF.member)))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_dopathstep_int_one_start(self):
+        self.preflang = self.g.value(PA, VOCAB.prefLang)
+        assert_set_equal({Literal("en")},
+                          self.e.do_path_step({self.preflang}, 1))
 
-    p = P("""Add <http://champin.net/#pa>"""
-          """ -<http://xmlns.com/foaf/0.1/member>"""
-          """ /<http://example.org/vocab#famousMember>"""
-          """ /<http://xmlns.com/foaf/0.1/name>"""
-          """ "John Doe" .""")
-    exp = G(INITIAL + """
-        _:ucbl v:famousMember <http://johndoe.org/#me> .
-        <http://johndoe.org/#me> f:name "John Doe" .
-    """)
+    def test_dopathstep_int_multiple_start(self):
+        starts = { trpl[2] for trpl in self.g.triples((None, VOCAB.prefLang, None)) }
+        assert_set_equal({Literal("en"), Literal("fr")},
+                          self.e.do_path_step(starts, 1))
 
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_dopathstep_int_partial_match(self):
+        starts = { trpl[2] for trpl in self.g.triples((None, VOCAB.prefLang, None)) }
+        assert_set_equal({Literal("tlh")},
+                          self.e.do_path_step(starts, 2))
 
-def test_add_path_existing():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ -<http://xmlns.com/foaf/0.1/member>"""
-          """ /<http://xmlns.com/foaf/0.1/name>"""
-          """ "Université Claude Bernard Lyon 1" .""")
-    exp = G(INITIAL)
+    def test_dopathstep_unique_one_start(self):
+        assert_set_equal({PA}, self.e.do_path_step({PA}, UNIQUE_CONSTRAINT))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_dopathstep_unique_multiple_start(self):
+        with assert_raises(NoUniqueMatch):
+            self.e.do_path_step(self.my_friends, UNIQUE_CONSTRAINT)
 
-def test_add_literal_as_subject():
-    p = P("""Add "Andy Seaborne" """
-          """ -<http://xmlns.com/foaf/0.1/name>"""
-          """ /<http://xmlns.com/foaf/0.1/nick>"""
-          """ "AndyS" .""")
-    exp = G(INITIAL.replace('"Andy Seaborne"',
-                            '"Andy Seaborne"; f:nick "AndyS"'))
+    def test_dopathstep_unique_zero_start(self):
+        with assert_raises(NoUniqueMatch):
+            self.e.do_path_step({}, UNIQUE_CONSTRAINT)
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_pathconstraint_simple(self):
+        constraint = PathConstraint([FOAF.holdsAccount])
+        for i in self.my_friends:
+            assert self.e.test_path_constraint(i, constraint)
+        assert not self.e.test_path_constraint(PA, constraint)
 
-def test_add_path_with_index():
-    p = P("""Add <http://champin.net/#pa> """
-          """ <http://example.org/vocab#prefLang>[1]"""
-          """ /-<http://example.org/vocab#speaksFluently>"""
-          """ <http://champin.net/#pa> .""")
-    exp = G(INITIAL + """
-        <http://champin.net/#pa> v:speaksFluently "en" .
-    """)
+    def test_pathconstraint_value(self):
+        constraint = PathConstraint([FOAF.name], Literal("Pierre-Antoine Champin"))
+        for i in self.my_friends:
+            assert not self.e.test_path_constraint(i, constraint)
+        assert self.e.test_path_constraint(PA, constraint)
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_pathconstraint_unicity(self):
+        constraint = PathConstraint([FOAF.knows, UNIQUE_CONSTRAINT])
+        for i in self.my_friends:
+            assert not self.e.test_path_constraint(i, constraint)
+        assert not self.e.test_path_constraint(PA, constraint)
 
-def test_del_simple():
-    p = P("""Delete <http://champin.net/#pa>"""
-          """ <http://xmlns.com/foaf/0.1/name> """
-          """ "Pierre-Antoine Champin" .""")
-    exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
-    
-def test_del_simple_inexisting():
-    p = P("""Delete <http://champin.net/#pa>"""
-          """ <http://xmlns.com/foaf/0.1/name> """
-          """ "PAC" .""")
-    exp = G(INITIAL)
+    # testing the patch commands
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
-    
-def test_del_path():
-    p = P("""Delete <http://champin.net/#pa>"""
-          """ -<http://xmlns.com/foaf/0.1/member> """
-          """ /<http://xmlns.com/foaf/0.1/name> """
-          """ "Université Claude Bernard Lyon 1" .""")
-    exp = G(INITIAL.replace("""f:name "Université Claude Bernard Lyon 1" ;""",
-                            ""))
+    def test_prefix_once(self):
+        self.e.prefix("foo", IRI(FOAF))
+        eq_(FOAF.Person, self.e.get_node(PN("foo", "Person")))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_prefix_twice(self):
+        self.e.prefix("foo", IRI(FOAF))
+        self.e.prefix("foo", IRI(VOCAB))
+        eq_(VOCAB.Person, self.e.get_node(PN("foo", "Person")))
 
-def test_del_path_inexisting():
-    p = P("""Delete <http://champin.net/#pa>"""
-          """ -<http://xmlns.com/foaf/0.1/member> """
-          """ /<http://xmlns.com/foaf/0.1/name> """
-          """ "UCBL" .""")
-    exp = G(INITIAL)
+    def test_bind_once(self):
+        self.e.bind(V("foo"), [VOCAB.foo])
+        eq_(VOCAB.foo, self.e.get_node(V("foo")))
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_bind_twice(self):
+        self.e.bind(V("foo"), [VOCAB.foo])
+        self.e.bind(V("foo"), [VOCAB.bar])
+        eq_(VOCAB.bar, self.e.get_node(V("foo")))
 
-def test_clear_simple():
-    p = P("""Clear <http://champin.net/#pa> """
-          """ <http://xmlns.com/foaf/0.1/knows> .""")
-    exp = G("""
-        @prefix v: <http://example.org/vocab#> .
-        @prefix f: <http://xmlns.com/foaf/0.1/> .
+    def test_bind_too_few(self):
+        with assert_raises(NoUniqueMatch):
+            self.e.bind(V("foo"), [PA, VOCAB.notUsed])
 
-        <http://champin.net/#pa>
-            f:name "Pierre-Antoine Champin" ;
-            v:prefLang ( "fr" "en" ) ;
-        .
+    def test_bind_too_many(self):
+        with assert_raises(NoUniqueMatch):
+            self.e.bind(V("foo"), [PA, FOAF.knows])
 
-        _:ucbl
-            f:name "Université Claude Bernard Lyon 1" ;
-            f:member <http://champin.net/#pa> .
-        
-        [] v:memberOf [ f:name "World Wide Web Consortium" ] ;
-           f:name "Sandro Hawke" .
+    def test_bind_from_variable(self):
+        self.e.bind(V("ucbl"), [PA, InvIRI(FOAF.member) ])
+        self.e.bind(V("pa"), [V("ucbl"), FOAF.member])
+        eq_(PA, self.e.get_node(V("pa")))
 
-        [] v:memberOf [ f:name "Epimorphic Ltd" ] ;
-           f:name "Andy Seaborne" .
-    """)
+    def test_add_simple(self):
+        self.e.add(PA, RDF.type, FOAF.Person)
+        exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_add_list(self):
+        self.e.add(PA, VOCAB.favNumbers, [ Literal(i) for i in (42, 7, 2, 10) ])
+        exp = G(INITIAL + """<http://champin.net/#pa> v:favNumbers (42 7 2 10) .""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_clear_simple_inexisting():
-    p = P("""Clear <http://champin.net/#pa> """
-          """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> .""")
-    exp = G(INITIAL)
+    def test_add_pname_subject(self):
+        self.e.add(PN("vocab", "alice"), FOAF.knows, PA)
+        exp = G(INITIAL + """v:alice f:knows <http://champin.net/#pa>.""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_add_pname_predicate(self):
+        self.e.add(PA, PN("foaf", "nickname"), Literal("pchampin"))
+        exp = G(INITIAL + """<http://champin.net/#pa> f:nickname "pchampin".""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_clear_path():
-    p = P("""Clear <http://champin.net/#pa> """
-          """ -<http://xmlns.com/foaf/0.1/member> """
-          """ /<http://xmlns.com/foaf/0.1/name> """
-          """ .""")
-    exp = G(INITIAL.replace("""f:name "Université Claude Bernard Lyon 1" ;""",
-                            ""))
+    def test_add_pname_object(self):
+        self.e.add(PA, RDF.type, PN("foaf", "Person"))
+        exp = G(INITIAL + """<http://champin.net/#pa> a f:Person.""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_add_variable_subject(self):
+        self.e.bind(V("s"), [PA, InvIRI(FOAF.member)])
+        self.e.add(V("s"), FOAF.homepage, IRI("http://www.univ-lyon1.fr/"))
+        exp = G(INITIAL + """_:ucbl f:homepage <http://www.univ-lyon1.fr/>.""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_simple():
-    p = P("""Replace <http://champin.net/#pa> """
-          """ <http://xmlns.com/foaf/0.1/name> """
-          """ "PAC" .""")
-    exp = G(INITIAL.replace('"Pierre-Antoine Champin"', '"PAC"'))
+    def test_add_variable_object(self):
+        self.e.bind(V("o"), [PA, InvIRI(FOAF.member)])
+        self.e.add(PA, VOCAB.memberOf, V("o"))
+        exp = G(INITIAL + """<http://champin.net/#pa> v:memberOf _:ucbl.""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_add_bnode(self):
+        mytwitter = BNode()
+        self.e.add(PA, FOAF.holdsAccount, mytwitter)
+        self.e.add(mytwitter, FOAF.accountName, Literal("pchampin"))
+        exp = G(INITIAL + """<http://champin.net/#pa> f:holdsAccount [ """
+                          """    f:accountName "pchampin"\n].""")
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_simple_existing():
-    p = P("""Replace <http://champin.net/#pa> """
-          """ <http://xmlns.com/foaf/0.1/name> """
-          """ "Pierre-Antoine Champin" .""")
-    exp = G(INITIAL)
+    def test_delete_simple(self):
+        self.e.delete(PA, FOAF.name, Literal("Pierre-Antoine Champin"))
+        exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_delete_pname_subject(self):
+        self.e.prefix("c", IRI("http://champin.net/#"))
+        self.e.delete(PN("c", "pa"), FOAF.name, Literal("Pierre-Antoine Champin"))
+        exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_simple_inexisting():
-    p = P("""Replace <http://champin.net/#pa> """
-          """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
-          """ <http://xmlns.com/foaf/0.1/Person> .""")
-    exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")
+    def test_delete_pname_predicate(self):
+        self.e.delete(PA, PN("foaf", "name"), Literal("Pierre-Antoine Champin"))
+        exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
-    
-def test_repl_path():
-    p = P("""Replace <http://champin.net/#pa> """
-          """ -<http://xmlns.com/foaf/0.1/member> """
-          """ /<http://xmlns.com/foaf/0.1/name> """
-          """ "UCBL" .""")
-    exp = G(INITIAL.replace('"Université Claude Bernard Lyon 1"', '"UCBL"'))
+    def test_delete_pname_object(self):
+        self.e.add(PA, RDF.type, FOAF.Person)
+        self.e.delete(PA, RDF.type, PN("foaf", "Person"))
+        exp = G(INITIAL)
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_delete_variable_subject(self):
+        self.e.bind(V("s"), [PA, InvIRI(FOAF.member)])
+        self.e.delete(V("s"), FOAF.name,
+                      Literal("Université Claude Bernard Lyon 1"))
+        exp = G(INITIAL.replace("""f:name "Université Claude Bernard Lyon 1" ;""", ""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_path_existing():
-    p = P("""Replace <http://champin.net/#pa> """
-          """ -<http://xmlns.com/foaf/0.1/member> """
-          """ /<http://xmlns.com/foaf/0.1/name> """
-          """ "Université Claude Bernard Lyon 1" .""")
-    exp = G(INITIAL)
+    def test_delete_variable_object(self):
+        # no easy way to test it in the current graph,
+        # so we add an arc and remove it again...
+        self.g.add((PA, VOCAB.memberOf, self.ucbl))
+        self.e.bind(V("o"), [PA, InvIRI(FOAF.member)])
+        self.e.delete(PA, VOCAB.memberOf, V("o"))
+        exp = G(INITIAL)
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_item(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1), [ Literal("en-US") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr" "en-US" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_path_inexisting():
-    p = P("""Replace <http://champin.net/#pa>"""
-          """ -<http://xmlns.com/foaf/0.1/member>"""
-          """ /<http://example.org/vocab#famousMember>"""
-          """ <http://johndoe.org/#me> .""")
-    exp = G(INITIAL + """
-        _:ucbl v:famousMember <http://johndoe.org/#me> .
-    """)
+    def test_replace_first_item(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0), [ Literal("fr-FR") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr-FR" "en" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_last_item(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(2), [ Literal("TLH") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr" "en" "TLH" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_index():
-    p = P("""Replace <http://champin.net/#pa>"""
-          """ <http://example.org/vocab#prefLang>[1]"""
-          """ "en-UK" .""")
-    exp = G(INITIAL.replace('"en"', '"en-UK"'))
+    def test_replace_item_with_several(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1), [ Literal("en-US"), Literal("en-GB") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "en-US" "en-GB" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_first_item_with_several(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0), [ Literal("fr-FR"), Literal("fr-BE") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr-FR" "fr-BE" "en" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_slice():
-    p = P("""Replace <http://champin.net/#pa>"""
-          """ <http://example.org/vocab#prefLang>[1:]"""
-          """ ("en-UK" "en-US" "en") .""")
-    exp = G(INITIAL.replace('"en"', '"en-UK" "en-US" "en"'))
+    def test_replace_last_item_with_several(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(2), [ Literal("tlh-k1"), Literal("tlh-k2") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "en" "tlh-k1" "tlh-k2" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_item_with_none(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1), [])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repl_whole_slice():
-    p = P("""Replace <http://champin.net/#pa>"""
-          """ <http://example.org/vocab#prefLang>[:]"""
-          """ () .""")
-    exp = G(INITIAL.replace(
-            '( "fr" "en" )',
-            "<http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>"))
+    def test_replace_first_item_with_none(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0), [])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "en" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_last_item_with_none(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(2), [])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "en" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repeat_subject():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
-          """ <http://xmlns.com/foaf/0.1/Person> .\n"""
-          """Add R <http://xmlns.com/foaf/0.1/nick> "pchampin" .""")
-    exp = G(INITIAL + """
-        <http://champin.net/#pa> a f:Person; f:nick "pchampin" .
-    """)
+    def test_replace_insert_begin(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0, '>', 0), [ Literal("a"), Literal("b") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "a" "b" "fr" "en" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_insert_middle(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1, '>', 1), [ Literal("a"), Literal("b") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "a" "b" "en" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repeat_predicate():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"""
-          """ <http://xmlns.com/foaf/0.1/Person> .\n"""
-          """Add <http://champin.net/#pa> R"""
-          """ <http://xmlns.com/foaf/0.1/Agent> .""")
-    exp = G(INITIAL + """
-        <http://champin.net/#pa> a f:Person, f:Agent .
-    """)
+    def test_replace_insert_end(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(None, '>'), [ Literal("a"), Literal("b") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "en" "tlh" "a" "b")"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_cut_begin(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0, '>', 2), [])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-def test_repeat_object():
-    p = P("""Add <http://champin.net/#pa>"""
-          """ <http://xmlns.com/foaf/0.1/nick> "pchampin" .\n"""
-          """Add <http://champin.net/#pa>"""
-          """ <http://example.org/vocab#login> R .""")
-    exp = G(INITIAL + """
-        <http://champin.net/#pa> f:nick "pchampin" ; v:login "pchampin" .
-    """)
+    def test_replace_cut_middle(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1, '>', 2), [])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    got = G(INITIAL)
-    p.apply_to(got)
-    assert isomorphic(got, exp), got.serialize(format="turtle")
+    def test_replace_cut_end(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1, '>'), [])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-@skip("write this test")
-def test_bnode_creation():
-    pass
+    def test_replace_cut_all(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0, '>'), [])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """()"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
 
-# TODO test all error conditions as well
-# TODO test with named graph as well
-# TODO test in unsafe mode
+    def test_replace_change_begin(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0, '>', 2), [ Literal("a"), Literal("b") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "a" "b" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
+    def test_replace_change_middle(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1, '>', 2), [ Literal("a"), Literal("b") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "a" "b" "tlh" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
+    def test_replace_change_end(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(1, '>'), [ Literal("a"), Literal("b") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "fr" "a" "b" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
+    def test_replace_change_all(self):
+        self.e.replace(PA, VOCAB.prefLang, Slice(0, '>'), [ Literal("a"), Literal("b") ])
+        exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
+                                """( "a" "b" )"""))
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
+
+    # the following tests demonstrate how
+    # complex identification schemes for bnodes are supported by patch
+    #
+
+    def test_identify_ucbl_1(self):
+        # the only organization of which PA is a member
+        self.e.bind(Variable("ucbl"),
+                    [ PA, InvIRI(FOAF.member), UNIQUE_CONSTRAINT ])
+        exp = self.g.value(None, FOAF.name,
+                           Literal("Université Claude Bernard Lyon 1"))
+        eq_(exp, self.e.get_node(Variable("ucbl")))
+
+    def test_identify_ucbl_2(self):
+        # the organization of which PA is a member, which is named UCBL
+        self.e.bind(Variable("ucbl"), [
+            PA,
+            InvIRI(FOAF.member),
+            PathConstraint(
+                [FOAF.name],
+                Literal("Université Claude Bernard Lyon 1")
+            )
+        ])
+        eq_(self.ucbl, self.e.get_node(Variable("ucbl")))
+
+    def test_identify_alexandre(self):
+        # the person that PA knows and whose twitter name is bertails
+        self.e.bind(Variable("ab"), [
+            PA,
+            FOAF.knows,
+            PathConstraint([
+                FOAF.holdsAccount,
+                PathConstraint(
+                    [FOAF.accountServiceHomepage],
+                    IRI("http://twitter.com/")
+                ),
+                FOAF.accountName,
+            ], Literal("bertails"))
+        ])
+        exp = self.g.value(None, FOAF.name, Literal("Alexandre Bertails"))
+        eq_(exp, self.e.get_node(Variable("ab")))
+
+    def test_identify_alexandre_twitter_account(self):
+        # the twitter account of the person that PA knows whose name is AB
+        self.e.bind(Variable("ab"), [
+            PA,
+            FOAF.knows,
+            PathConstraint(
+                [FOAF.name],
+                Literal("Alexandre Bertails")
+            ),
+            UNIQUE_CONSTRAINT,
+            FOAF.holdsAccount,
+            PathConstraint(
+                [FOAF.accountServiceHomepage],
+                IRI("http://twitter.com/")
+            )
+        ])
+        exp = self.g.value(None, FOAF.accountName, Literal("bertails"))
+        eq_(exp, self.e.get_node(Variable("ab")))
+
