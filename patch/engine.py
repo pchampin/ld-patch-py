@@ -17,12 +17,34 @@
 #    You should have received a copy of the GNU Lesser General Public License
 #    along with RDF-PATCH.  If not, see <http://www.gnu.org/licenses/>.
 
+"""
+I implement an engine executing an LD-Patch.
+
+Design note
+-----------
+
+This implementation is not limited to the abstract syntax of LD-Patch,
+it extends it with a Prefix command (for binding a prefix to a namespace)
+and supports PrefixedNames wherever IRIs are expected.
+
+While this could be handled by concrete syntax parsers,
+(and may be should for the sake of purity),
+it seems like a better idea to factorize it here,
+as all concrete syntax will probably have to rely on such a mechanism.
+
+TODO: another approach would be to expect parsers to use expand_pname,
+and to only provide IRIs. Might be cleaner?
+"""
+
 from collections import namedtuple
 
 from rdflib import BNode, Literal, RDF, URIRef as IRI, Variable
 
 
-PrefixedName = namedtuple("PrefixedName", ["prefix", "suffix"])
+_PrefixedNameBase = namedtuple("PrefixedName", ["prefix", "suffix"])
+class PrefixedName (_PrefixedNameBase):
+    def __new__(cls, prefix, suffix=""):
+        return _PrefixedNameBase.__new__(cls, prefix, suffix)
 
 InvIRI = namedtuple("InvIRI", ["iri"])
 
@@ -36,7 +58,7 @@ class Slice(_SliceBase):
     """A slice of indexes in a list.
 
     idx1 == None means "after the end" (idx2 will then be unspecified)
-    idx2 == -1 means "until the end"
+    idx2 == None means "until the end"
     """
     def __new__(cls, idx1, sep=None, idx2=None):
         if sep is None:
@@ -44,7 +66,10 @@ class Slice(_SliceBase):
             idx2 = idx1 + 1
         return _SliceBase.__new__(cls, idx1, idx2)
 
-UNIQUE_CONSTRAINT = object()
+class _UnicityConstraintSingleton(object):
+    def __repr__(self):
+        return "UNICITY_CONSTRAINT"
+UNICITY_CONSTRAINT = _UnicityConstraintSingleton()
 
 
 
@@ -65,17 +90,23 @@ class PatchEngine(object):
 
     # helper methods
 
+    def expand_pname(self, prefix, suffix=""):
+        """
+        Convert prefixed name to IRI.
+        """
+        iriprefix = self._namespaces.get(prefix)
+        if iriprefix is None:
+            raise UndefinedPrefixError(
+                "{}:{}".format(prefix, suffix))
+        return IRI(iriprefix + suffix)
+
     def get_node(self, element):
         """
         Convert variables and bnodes, and return anything else unchanged.
         """
         typelt = type(element)
         if typelt is PrefixedName:
-            iriprefix = self._namespaces.get(element.prefix)
-            if iriprefix is None:
-                raise UndefinedPrefixError(
-                    "{}:{}".format(element.prefix, element.suffix))
-            ret = IRI(iriprefix + element.suffix)
+            return self.expand_pname(*element)
         elif typelt is Variable:
             ret = self._variables.get(element)
             if ret is not None:
@@ -93,7 +124,7 @@ class PatchEngine(object):
     def do_path_step(self, nodeset, pathelt):
         typelt = type(pathelt)
         if typelt is PrefixedName:
-            pathelt = self.get_node(pathelt)
+            pathelt = self.expand_pname(*pathelt)
             typelt = IRI
         if typelt is IRI:
             return {
@@ -115,7 +146,7 @@ class PatchEngine(object):
             return ret
         elif typelt is PathConstraint:
             return { i for i in nodeset if self.test_path_constraint(i, pathelt) }
-        elif pathelt is UNIQUE_CONSTRAINT:
+        elif pathelt is UNICITY_CONSTRAINT:
             if len(nodeset) != 1:
                 raise NoUniqueMatch(nodeset)
             return nodeset

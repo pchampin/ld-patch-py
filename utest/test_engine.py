@@ -20,15 +20,12 @@ import sys
 from os.path import dirname
 sys.path.append(dirname(dirname(__file__)))
 
-from cStringIO import StringIO
 from nose.tools import assert_raises, assert_set_equal, eq_
-from pyparsing import ParseException
-from rdflib import Graph, Namespace, RDF
+from rdflib import Graph, Namespace
 from rdflib.compare import isomorphic
-from sets import ImmutableSet
 from unittest import skip
 
-from patch import *
+from patch.engine import *
 
 INITIAL = """
 @prefix v: <http://example.org/vocab#> .
@@ -177,15 +174,15 @@ class TestPatchEngine(object):
                           self.e.do_path_step(starts, 2))
 
     def test_dopathstep_unique_one_start(self):
-        assert_set_equal({PA}, self.e.do_path_step({PA}, UNIQUE_CONSTRAINT))
+        assert_set_equal({PA}, self.e.do_path_step({PA}, UNICITY_CONSTRAINT))
 
     def test_dopathstep_unique_multiple_start(self):
         with assert_raises(NoUniqueMatch):
-            self.e.do_path_step(self.my_friends, UNIQUE_CONSTRAINT)
+            self.e.do_path_step(self.my_friends, UNICITY_CONSTRAINT)
 
     def test_dopathstep_unique_zero_start(self):
         with assert_raises(NoUniqueMatch):
-            self.e.do_path_step({}, UNIQUE_CONSTRAINT)
+            self.e.do_path_step({}, UNICITY_CONSTRAINT)
 
     def test_pathconstraint_simple(self):
         constraint = PathConstraint([FOAF.holdsAccount])
@@ -200,7 +197,7 @@ class TestPatchEngine(object):
         assert self.e.test_path_constraint(PA, constraint)
 
     def test_pathconstraint_unicity(self):
-        constraint = PathConstraint([FOAF.knows, UNIQUE_CONSTRAINT])
+        constraint = PathConstraint([FOAF.knows, UNICITY_CONSTRAINT])
         for i in self.my_friends:
             assert not self.e.test_path_constraint(i, constraint)
         assert not self.e.test_path_constraint(PA, constraint)
@@ -481,7 +478,7 @@ class TestPatchEngine(object):
     def test_identify_ucbl_1(self):
         # the only organization of which PA is a member
         self.e.bind(Variable("ucbl"),
-                    [ PA, InvIRI(FOAF.member), UNIQUE_CONSTRAINT ])
+                    [ PA, InvIRI(FOAF.member), UNICITY_CONSTRAINT ])
         exp = self.g.value(None, FOAF.name,
                            Literal("Université Claude Bernard Lyon 1"))
         eq_(exp, self.e.get_node(Variable("ucbl")))
@@ -524,7 +521,7 @@ class TestPatchEngine(object):
                 [FOAF.name],
                 Literal("Alexandre Bertails")
             ),
-            UNIQUE_CONSTRAINT,
+            UNICITY_CONSTRAINT,
             FOAF.holdsAccount,
             PathConstraint(
                 [FOAF.accountServiceHomepage],
