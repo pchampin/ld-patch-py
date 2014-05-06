@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 #    This file is part of RDF-PATCH
@@ -17,22 +18,34 @@
 #    You should have received a copy of the GNU Lesser General Public License
 #    along with RDF-PATCH.  If not, see <http://www.gnu.org/licenses/>.
 
-def apply(patch, graph, init_ns=None, init_var=None, syntax="simple"):
-    """
-    I parse `patch` (either a file-like or a string), and apply it to `graph`.
+from os.path import abspath, dirname
+from sys import argv, path, stdin, stdout
 
-    Other parameters:
-    * `init_ns`: initial namespace binding
-    * `init_var`: initial variables binding
-    * `syntax`: concrete syntax used in `patch`
-    """
-    if syntax == "simple":
-        from .simple import Parser
-    else:
-        raise ValueError("Unknown LD-Patch syntax {}".format())
+try:
+    import ldpatch
+except ImportError, ex:
+    try:
+        SOURCE_DIR = dirname(dirname(abspath(__file__)))
+    except NameError, ex2:
+        # __file__ is not define in py2exe, so raise ImportError anyway
+        raise ex
+    path.append(SOURCE_DIR)
+    import ldpatch
 
-    if hasattr(patch, "read"):
-        patch = patch.read()
+if len(argv) != 2 or "--help" in argv:
+    print "usage: %s <patch-file>" % argv[0]
+    print "  reads a Turtle file from stdin,"
+    print "  applies it LD-Patch from <patch-file>,"
+    print "  and outputs the resulting graph in Turtle on stdout"
+    exit(-1)
 
-    from .engine import PatchEngine
-    Parser(PatchEngine(graph, init_ns, init_var)).parseString(patch)
+from rdflib import Graph
+from ldpatch import apply
+
+g = Graph()
+g.load(stdin, format="turtle")
+
+with open(argv[1]) as f:
+    apply(f, g)
+
+g.serialize(stdout, format="turtle")

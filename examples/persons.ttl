@@ -1,0 +1,30 @@
+# a small example representing persons,
+# with a number of identifiable bnodes
+
+@prefix v: <http://example.org/vocab#> .
+@prefix f: <http://xmlns.com/foaf/0.1/> .
+
+<http://champin.net/#pa>
+    f:name "Pierre-Antoine Champin" ;
+    v:prefLang ( "fr" "en" "tlh" ) ;
+    f:knows
+        [
+            f:name "Alexandre Bertails" ;
+            f:holdsAccount [
+                f:accountName "bertails" ;
+                f:accountServiceHomepage <http://twitter.com/>
+            ];
+            v:prefLang ( "en" "fr" ) ;
+        ],
+        [
+            f:name "Andrei Sambra" ;
+            f:holdsAccount [
+                f:accountName "therealdeiu" ;
+                f:accountServiceHomepage <http://twitter.com/>
+            ];
+        ];
+.
+
+_:ucbl
+    f:name "Université Claude Bernard Lyon 1" ;
+    f:member <http://champin.net/#pa> .

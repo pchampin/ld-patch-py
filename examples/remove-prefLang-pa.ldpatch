@@ -1,0 +1,14 @@
+# This patch removes Pierre-Antoine's list of preferred Languages
+
+Prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+Prefix foaf: <http://xmlns.com/foaf/0.1/>
+Prefix v: <http://example.org/vocab#>
+
+# although this is not required, variables can be used to hold IRIs,
+# not only blankd nodes
+Bind ?pa <http://champin.net/#pa>
+
+# first remove all elements from the list...
+Replace ?pa v:prefLang 0> ()
+# ... then delete the remaining arc
+Delete ?pa v:prefLang rdf:nil
