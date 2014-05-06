@@ -105,16 +105,16 @@ class TestSimpleParser(object):
         eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
 
     def test_add_pnames(self):
-        self.p.parseString("Add ex:a ex:b ex:c")
-        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
+        self.p.parseString("Add ex:a ex:b ex:cde")
+        eq_(("add", EX.a, EX.b, EX.cde), self.e.pop())
 
     def test_add_bnodes(self):
-        self.p.parseString("Add _:a ex:b _:c")
-        eq_(("add", BNode("a"), EX.b, BNode("c")), self.e.pop())
+        self.p.parseString("Add _:a ex:b _:cde")
+        eq_(("add", BNode("a"), EX.b, BNode("cde")), self.e.pop())
 
     def test_add_variables(self):
-        self.p.parseString("Add ?a ex:b ?c")
-        eq_(("add", V("a"), EX.b, V("c")), self.e.pop())
+        self.p.parseString("Add ?a ex:b ?cde")
+        eq_(("add", V("a"), EX.b, V("cde")), self.e.pop())
 
     def test_add_list(self):
         self.p.parseString("Add <http://ex.co/a> ex:b ( <http://ex.co/c> ex:d )")
@@ -167,16 +167,16 @@ class TestSimpleParser(object):
         eq_(("delete", EX.a, EX.b, EX.c), self.e.pop())
 
     def test_delete_pnames(self):
-        self.p.parseString("Delete ex:a ex:b ex:c")
-        eq_(("delete", EX.a, EX.b, EX.c), self.e.pop())
+        self.p.parseString("Delete ex:a ex:b ex:cde")
+        eq_(("delete", EX.a, EX.b, EX.cde), self.e.pop())
 
     def test_delete_bnodes(self):
-        self.p.parseString("Delete _:a ex:b _:c")
-        eq_(("delete", BNode("a"), EX.b, BNode("c")), self.e.pop())
+        self.p.parseString("Delete _:a ex:b _:cde")
+        eq_(("delete", BNode("a"), EX.b, BNode("cde")), self.e.pop())
 
     def test_delete_variables(self):
-        self.p.parseString("Delete ?a ex:b ?c")
-        eq_(("delete", V("a"), EX.b, V("c")), self.e.pop())
+        self.p.parseString("Delete ?a ex:b ?cde")
+        eq_(("delete", V("a"), EX.b, V("cde")), self.e.pop())
 
     def test_delete_literal_integer(self):
         self.p.parseString("Delete <http://ex.co/a> ex:b 42")

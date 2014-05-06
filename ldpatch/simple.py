@@ -52,7 +52,6 @@ PN_CHARS_BASE= Regex(ur'[A-Z]|[a-z]|[\u00C0-\u00D6]|[\u00D8-\u00F6]|[\u00F8-\u02
 PN_CHARS_U = PN_CHARS_BASE | '_'
 PN_CHARS = PN_CHARS_U | '-' | Regex(ur'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u2040]')
 
-# The two rules below use the following pattern (
 #    A ( (B|'.')* B )?
 # However, these rules do not work as is in PyParsing, which greedily matches B|'.'
 # and then fails to match the final B.
@@ -66,6 +65,11 @@ PN_CHARS = PN_CHARS_U | '-' | Regex(ur'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u20
 #    + Optional(ZeroOrMore(PN_CHARS | '.' | ':' | PLX)
 #               + (PN_CHARS | ':' | PLX))
 #)("suffix")
+#BLANK_NODE_LABEL = Combine(
+#    '_:'
+#    + ( PN_CHARS_U | Regex('[0-9]') )
+#    + Optional(ZeroOrMore(PN_CHARS|'.') + PN_CHARS)
+#)
 
 # We replace them with a version allowing '.' at the end,
 # which would be a problem in Turtle, but not in LD-Patch anyway.
@@ -81,8 +85,9 @@ PN_LOCAL = Combine(
 BLANK_NODE_LABEL = Combine(
     '_:'
     + ( PN_CHARS_U | Regex('[0-9]') )
-    + Optional(ZeroOrMore(PN_CHARS|'.') + PN_CHARS)
+    + ZeroOrMore(PN_CHARS|'.')
 )
+
 PNAME_NS = Optional(PN_PREFIX, "") + Suppress(':')
 PNAME_LN = Combine(PNAME_NS + PN_LOCAL)
 IRIREF = Regex(r'<([^\x00-\x20<>"{}|^`\\]|\u[0-9a-fA-F]{4}|\U[0-9a-fA-F]{8})*>')
@@ -104,14 +109,6 @@ INDEX = Regex(r'[0-9]+')
 UNICITY_CONSTRAINT = Literal('!')
 SLICE = ( INDEX + Optional('>' + Optional(INDEX) ) ) | '>'
 
-
-#@PN_PREFIX.setParseAction
-#def parse_pnprefix(s, loc, toks):
-#    return u"".join(toks)
-
-#@PN_LOCAL.setParseAction
-#def parse_pnprefix(s, loc, toks):
-#    return u"".join(toks)
 
 @IRIREF.setParseAction
 def parse_iri(s, loc, toks):
@@ -260,7 +257,7 @@ class Parser(object):
         self.engine.replace(*toks[1:])
 
     def parseString(self, txt):
-        self.grammar.parseString(txt)
+        self.grammar.parseString(txt, True)
 
 
 # for temporary testing
