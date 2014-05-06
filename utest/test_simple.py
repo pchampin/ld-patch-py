@@ -21,8 +21,8 @@ from __future__ import unicode_literals
 from nose.tools import assert_raises, assert_list_equal, eq_
 from rdflib import BNode, Literal, Namespace, URIRef, Variable as V, XSD
 
-from patch.engine import InvIRI, PathConstraint, Slice, UNICITY_CONSTRAINT
-from patch.simple import Parser
+from ldpatch.engine import InvIRI, PathConstraint, Slice, UNICITY_CONSTRAINT
+from ldpatch.simple import Parser
 
 EX = Namespace("http://ex.co/")
 

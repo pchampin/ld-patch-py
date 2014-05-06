@@ -33,7 +33,7 @@ The grammar is split in two parts:
   so their parse-actions are bound to instance methods,
   as they depend on the state of the parser at a given time.
 
-To prevent re-generating the grammar for each new patch,
+To prevent re-generating the grammar for each new ldpatch,
 Parser has a ``reset`` method that allows to restart it afresh.
 
 """
@@ -264,7 +264,7 @@ class Parser(object):
 
 
 # for temporary testing
-from patch.engine import PatchEngine
+from ldpatch.engine import PatchEngine
 g = rdflib.Graph()
 e = PatchEngine(g, init_ns={"xsd": rdflib.XSD})
 p = Parser(e)

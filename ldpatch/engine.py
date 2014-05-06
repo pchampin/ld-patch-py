@@ -75,7 +75,7 @@ UNICITY_CONSTRAINT = _UnicityConstraintSingleton()
 
 class PatchEngine(object):
     """
-    An object actually doing the patch
+    An object actually doing the ldpatch
     """
 
     def __init__(self, graph, init_ns=None, init_vars=None):
@@ -187,7 +187,7 @@ class PatchEngine(object):
         return curnode
 
 
-    # patch commands
+    # ldpatch commands
 
     def prefix(self, prefix, iri):
         self._namespaces[prefix] = iri

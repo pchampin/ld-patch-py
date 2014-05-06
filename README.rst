@@ -1,5 +1,5 @@
 ===========
- RDF-PATCH
+ LD-PATCH
 ===========
 
 This project aims at implementing patch format for Linked Data,
@@ -14,8 +14,7 @@ without relying on bnode identifiers.
 Abstract syntax
 ===============
 
-For the moment, it only implements an abstract syntax,
-which should be equivalent to this::
+The abstract syntax of LD-Patch is the following::
 
     LDPatch ::= ( Bind | Add | Delete | Replace )*
     Bind ::= Var Path
@@ -48,7 +47,8 @@ which should be equivalent to this::
 Concrete Syntax
 ===============
 
-This concrete syntax uses Turtle for terminal symbols::
+The ``simple`` module implement a parser for a concrete syntax
+which borrows a lot from Turtle::
 
     LDPatch ::= ( Bind | Add | Delete | Replace | Prefix | Comment )*
     Bind ::= "Bind" Var Path

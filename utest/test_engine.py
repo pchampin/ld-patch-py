@@ -25,7 +25,7 @@ from rdflib import Graph, Namespace
 from rdflib.compare import isomorphic
 from unittest import skip
 
-from patch.engine import *
+from ldpatch.engine import *
 
 INITIAL = """
 @prefix v: <http://example.org/vocab#> .
@@ -203,7 +203,7 @@ class TestPatchEngine(object):
         assert not self.e.test_path_constraint(PA, constraint)
 
 
-    # testing the patch commands
+    # testing the ldpatch commands
 
     def test_prefix_once(self):
         self.e.prefix("foo", IRI(FOAF))
@@ -472,7 +472,7 @@ class TestPatchEngine(object):
 
 
     # the following tests demonstrate how
-    # complex identification schemes for bnodes are supported by patch
+    # complex identification schemes for bnodes are supported by ldpatch
     #
 
     def test_identify_ucbl_1(self):
