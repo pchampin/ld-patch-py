@@ -37,7 +37,7 @@ To prevent re-generating the grammar for each new ldpatch,
 Parser has a ``reset`` method that allows to restart it afresh.
 
 """
-from pyparsing import Combine, Forward, Group, Literal, OneOrMore, Optional, quotedString, Regex, Suppress, ZeroOrMore
+from pyparsing import And, Combine, Forward, Group, Literal, OneOrMore, Optional, quotedString, Regex, Suppress, ZeroOrMore
 
 import rdflib
 
@@ -99,6 +99,7 @@ EXPONENT = Regex(r'[eE][+-]?[0-9]+')
 DOUBLE = Regex(r'[+-]?[0-9]+\.[0-9]*|[+-]?\.?[0-9]+|[+-]?\.?[0-9]+') + EXPONENT
 NUMERIC_LITERAL = DOUBLE | DECIMAL | INTEGER
 BOOLEAN_LITERAL = Regex(r'true|false')
+ANON = Literal("[") + Literal("]")
 
 # other context-independant rules
 VARIABLE = Combine(
@@ -117,6 +118,10 @@ def parse_iri(s, loc, toks):
 @BLANK_NODE_LABEL.setParseAction
 def parse_bnode(s, loc, toks):
     return rdflib.BNode(toks[0][2:])
+
+@ANON.setParseAction
+def parse_bnode(s, loc, toks):
+    return rdflib.BNode()
 
 @INTEGER.setParseAction
 def parse_integer(s, loc, toks):
@@ -159,34 +164,29 @@ class Parser(object):
         self.reset(engine)
         PrefixedName = PNAME_LN | PNAME_NS
         Iri = IRIREF | PrefixedName
-        TurtleLiteral = STRING \
+        RDFLiteral = STRING \
             + Optional(LANGTAG("langtag") | Group(Suppress('^^') + Iri)("datatype"))
-        RdfLiteral = TurtleLiteral | NUMERIC_LITERAL | BOOLEAN_LITERAL
-        BNode = BLANK_NODE_LABEL
+        PatchLiteral = RDFLiteral | NUMERIC_LITERAL | BOOLEAN_LITERAL
+        BNode = BLANK_NODE_LABEL | ANON
 
         Subject = Iri | BNode | VARIABLE
         Predicate = Iri
-        Object = Iri | BNode | RdfLiteral | VARIABLE
+        Object = Iri | BNode | PatchLiteral | VARIABLE
+        Value = Iri | PatchLiteral | VARIABLE
         List = Group(Suppress('(') + ZeroOrMore(Object) + Suppress(')'))
 
         InvPredicate = Suppress('-') + Predicate
-        PathElement = Predicate | InvPredicate | INDEX
-        Constraint = Forward()
-        PathConstraint = Suppress('[') \
-            + Group (
-                PathElement  + ZeroOrMore(Constraint)
-                + ZeroOrMore( Suppress('/') + PathElement + ZeroOrMore(Constraint))
-            )("path") \
-            + Optional( Suppress('=') + Object )("value") \
-            + Suppress(']')
-        Constraint << ( PathConstraint | UNICITY_CONSTRAINT )
-        Path = Group(
-            Object + ZeroOrMore(Constraint)
-            + ZeroOrMore(Suppress('/') + PathElement + ZeroOrMore(Constraint))
-        )
+        Step = Suppress('/') + (Predicate | InvPredicate | INDEX)
+        Filter = Forward()
+        Constraint = ( Filter | UNICITY_CONSTRAINT )
+        Path = Group(ZeroOrMore(Step | Constraint))
+        Filter << (Suppress('[')
+            + Group(ZeroOrMore(Step | Constraint))("path") # Path (but copy required for naming)
+            + Optional( Suppress('=') + Object )("value")
+            + Suppress(']'))
 
         Prefix = Literal("Prefix") + PNAME_NS + IRIREF
-        Bind = Literal("Bind") + VARIABLE + Path
+        Bind = Literal("Bind") + VARIABLE + Value + Path
         Add = Literal("Add") + Subject + Predicate + (Object | List)
         Delete = Literal("Delete") + Subject + Predicate + Object
         Replace = Literal("Replace") + Subject + Predicate + SLICE + List
@@ -198,10 +198,10 @@ class Parser(object):
         self.grammar = Patch
 
         PrefixedName.setParseAction(self._parse_pname)
-        TurtleLiteral.setParseAction(self._parse_turtleliteral)
+        RDFLiteral.setParseAction(self._parse_turtleliteral)
         List.setParseAction(self._parse_list)
         InvPredicate.setParseAction(self._parse_invpredicate)
-        PathConstraint.setParseAction(self._parse_pathconstraint)
+        Filter.setParseAction(self._parse_filter)
         Path.setParseAction(self._parse_list)
         Prefix.setParseAction(self._do_prefix)
         Bind.setParseAction(self._do_bind)
@@ -233,7 +233,7 @@ class Parser(object):
     def _parse_invpredicate(self, s, loc, toks):
         return engine.InvIRI(toks[0])
 
-    def _parse_pathconstraint(self, s, loc, toks):
+    def _parse_filter(self, s, loc, toks):
         if toks.value:
             value = toks.value[0]
         else:

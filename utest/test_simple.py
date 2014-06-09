@@ -40,8 +40,8 @@ class DummyEngine(object):
     def prefix(self, prefix, iri):
         self.operations.append(("prefix", prefix, iri))
 
-    def bind(self, variable, path):
-        self.operations.append(("bind", variable, path))
+    def bind(self, variable, value, path):
+        self.operations.append(("bind", variable, value, path))
 
     def add(self, subject, predicate, object):
         self.operations.append(("add", subject, predicate, object))
@@ -78,26 +78,27 @@ class TestSimpleParser(object):
 
     def test_bind(self):
         self.p.parseString("Bind ?x <http://ex.co/a>")
-        eq_(("bind", V("x"), [EX.a]), self.e.pop())
+        eq_(("bind", V("x"), EX.a, []), self.e.pop())
 
     def test_bind_path(self):
         self.p.parseString("Bind ?x <http://ex.co/a>/ex:b/-ex:c/42")
-        eq_(("bind", V("x"), [EX.a, EX.b, InvIRI(EX.c), 42]), self.e.pop())
+        eq_(("bind", V("x"), EX.a, [EX.b, InvIRI(EX.c), 42]), self.e.pop())
 
     def test_bind_constrained_path(self):
-        self.p.parseString("Bind ?x <http://ex.co/a>/ex:b!/-ex:c[ex:b!/-ex:c/42=0]!/42")
-        eq_(("bind", V("x"), [EX.a, EX.b, UNICITY_CONSTRAINT, InvIRI(EX.c),
-                              PathConstraint([EX.b, UNICITY_CONSTRAINT,
-                                              InvIRI(EX.c), 42
-                                             ], Literal(0)
-                              ),
-                              UNICITY_CONSTRAINT, 42,
-                              ]),
+        self.p.parseString("Bind ?x <http://ex.co/a> /ex:b!/-ex:c[/ex:b!/-ex:c/42=0]!/42")
+        eq_(("bind", V("x"), EX.a, [
+            EX.b, UNICITY_CONSTRAINT, InvIRI(EX.c),
+            PathConstraint([
+                EX.b, UNICITY_CONSTRAINT,
+                InvIRI(EX.c), 42
+                ], Literal(0) ),
+            UNICITY_CONSTRAINT, 42,
+            ]),
             self.e.pop())
 
     def test_bind_unicode(self):
         self.p.parseString("Bind ?Iñtërnâtiônàlizætiøn <http://ex.co/a>")
-        eq_(("bind", V("Iñtërnâtiônàlizætiøn"), [URIRef("http://ex.co/a")]), self.e.pop())
+        eq_(("bind", V("Iñtërnâtiônàlizætiøn"), URIRef("http://ex.co/a"), []), self.e.pop())
 
     def test_add_iris(self):
         self.p.parseString("Add <http://ex.co/a> <http://ex.co/b> "
@@ -111,6 +112,12 @@ class TestSimpleParser(object):
     def test_add_bnodes(self):
         self.p.parseString("Add _:a ex:b _:cde")
         eq_(("add", BNode("a"), EX.b, BNode("cde")), self.e.pop())
+
+    def test_add_bnodes_brackets(self):
+        self.p.parseString("Add _:a ex:b []")
+        tpl = self.e.pop()
+        eq_(("add", BNode("a"), EX.b), tpl[:-1])
+        assert isinstance(tpl[-1], BNode)
 
     def test_add_variables(self):
         self.p.parseString("Add ?a ex:b ?cde")
@@ -173,6 +180,12 @@ class TestSimpleParser(object):
     def test_delete_bnodes(self):
         self.p.parseString("Delete _:a ex:b _:cde")
         eq_(("delete", BNode("a"), EX.b, BNode("cde")), self.e.pop())
+
+    def test_delete_bnodes_brackets(self):
+        self.p.parseString("Delete _:a ex:b [   ]")
+        tpl = self.e.pop()
+        eq_(("delete", BNode("a"), EX.b), tpl[:-1])
+        assert isinstance(tpl[-1], BNode)
 
     def test_delete_variables(self):
         self.p.parseString("Delete ?a ex:b ?cde")

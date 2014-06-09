@@ -192,13 +192,12 @@ class PatchEngine(object):
     def prefix(self, prefix, iri):
         self._namespaces[prefix] = iri
 
-    def bind(self, variable, path):
+    def bind(self, variable, value, path):
         assert isinstance(variable, Variable)
         path = list(path)
-        assert len(path) >= 1
 
-        nodeset = {self.get_node(path[0])}
-        for step in path[1:]:
+        nodeset = {self.get_node(value)}
+        for step in path:
             nodeset = self.do_path_step(nodeset, step)
         if len(nodeset) != 1:
             raise NoUniqueMatch(nodeset)

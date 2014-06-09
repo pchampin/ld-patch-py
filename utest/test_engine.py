@@ -215,25 +215,25 @@ class TestPatchEngine(object):
         eq_(VOCAB.Person, self.e.get_node(PN("foo", "Person")))
 
     def test_bind_once(self):
-        self.e.bind(V("foo"), [VOCAB.foo])
+        self.e.bind(V("foo"), VOCAB.foo, [])
         eq_(VOCAB.foo, self.e.get_node(V("foo")))
 
     def test_bind_twice(self):
-        self.e.bind(V("foo"), [VOCAB.foo])
-        self.e.bind(V("foo"), [VOCAB.bar])
+        self.e.bind(V("foo"), VOCAB.foo, [])
+        self.e.bind(V("foo"), VOCAB.bar, [])
         eq_(VOCAB.bar, self.e.get_node(V("foo")))
 
     def test_bind_too_few(self):
         with assert_raises(NoUniqueMatch):
-            self.e.bind(V("foo"), [PA, VOCAB.notUsed])
+            self.e.bind(V("foo"), PA, [VOCAB.notUsed])
 
     def test_bind_too_many(self):
         with assert_raises(NoUniqueMatch):
-            self.e.bind(V("foo"), [PA, FOAF.knows])
+            self.e.bind(V("foo"), PA, [FOAF.knows])
 
     def test_bind_from_variable(self):
-        self.e.bind(V("ucbl"), [PA, InvIRI(FOAF.member) ])
-        self.e.bind(V("pa"), [V("ucbl"), FOAF.member])
+        self.e.bind(V("ucbl"), PA, [InvIRI(FOAF.member) ])
+        self.e.bind(V("pa"), V("ucbl"), [FOAF.member])
         eq_(PA, self.e.get_node(V("pa")))
 
     def test_add_simple(self):
@@ -267,14 +267,14 @@ class TestPatchEngine(object):
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_add_variable_subject(self):
-        self.e.bind(V("s"), [PA, InvIRI(FOAF.member)])
+        self.e.bind(V("s"), PA, [InvIRI(FOAF.member)])
         self.e.add(V("s"), FOAF.homepage, IRI("http://www.univ-lyon1.fr/"))
         exp = G(INITIAL + """_:ucbl f:homepage <http://www.univ-lyon1.fr/>.""")
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_add_variable_object(self):
-        self.e.bind(V("o"), [PA, InvIRI(FOAF.member)])
+        self.e.bind(V("o"), PA, [InvIRI(FOAF.member)])
         self.e.add(PA, VOCAB.memberOf, V("o"))
         exp = G(INITIAL + """<http://champin.net/#pa> v:memberOf _:ucbl.""")
         got = self.g
@@ -316,7 +316,7 @@ class TestPatchEngine(object):
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_delete_variable_subject(self):
-        self.e.bind(V("s"), [PA, InvIRI(FOAF.member)])
+        self.e.bind(V("s"), PA, [InvIRI(FOAF.member)])
         self.e.delete(V("s"), FOAF.name,
                       Literal("Université Claude Bernard Lyon 1"))
         exp = G(INITIAL.replace("""f:name "Université Claude Bernard Lyon 1" ;""", ""))
@@ -327,7 +327,7 @@ class TestPatchEngine(object):
         # no easy way to test it in the current graph,
         # so we add an arc and remove it again...
         self.g.add((PA, VOCAB.memberOf, self.ucbl))
-        self.e.bind(V("o"), [PA, InvIRI(FOAF.member)])
+        self.e.bind(V("o"), PA, [InvIRI(FOAF.member)])
         self.e.delete(PA, VOCAB.memberOf, V("o"))
         exp = G(INITIAL)
         got = self.g
@@ -477,16 +477,15 @@ class TestPatchEngine(object):
 
     def test_identify_ucbl_1(self):
         # the only organization of which PA is a member
-        self.e.bind(Variable("ucbl"),
-                    [ PA, InvIRI(FOAF.member), UNICITY_CONSTRAINT ])
+        self.e.bind(Variable("ucbl"), PA,
+                    [ InvIRI(FOAF.member), UNICITY_CONSTRAINT ])
         exp = self.g.value(None, FOAF.name,
                            Literal("Université Claude Bernard Lyon 1"))
         eq_(exp, self.e.get_node(Variable("ucbl")))
 
     def test_identify_ucbl_2(self):
         # the organization of which PA is a member, which is named UCBL
-        self.e.bind(Variable("ucbl"), [
-            PA,
+        self.e.bind(Variable("ucbl"), PA, [
             InvIRI(FOAF.member),
             PathConstraint(
                 [FOAF.name],
@@ -497,8 +496,7 @@ class TestPatchEngine(object):
 
     def test_identify_alexandre(self):
         # the person that PA knows and whose twitter name is bertails
-        self.e.bind(Variable("ab"), [
-            PA,
+        self.e.bind(Variable("ab"), PA, [
             FOAF.knows,
             PathConstraint([
                 FOAF.holdsAccount,
@@ -514,8 +512,7 @@ class TestPatchEngine(object):
 
     def test_identify_alexandre_twitter_account(self):
         # the twitter account of the person that PA knows whose name is AB
-        self.e.bind(Variable("ab"), [
-            PA,
+        self.e.bind(Variable("ab"), PA, [
             FOAF.knows,
             PathConstraint(
                 [FOAF.name],
