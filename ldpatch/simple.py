@@ -185,7 +185,7 @@ class Parser(object):
             + Optional( Suppress('=') + Object )("value")
             + Suppress(']'))
 
-        Prefix = Literal("Prefix") + PNAME_NS + IRIREF
+        Prefix = Literal("@prefix") + PNAME_NS + IRIREF
         Bind = Literal("Bind") + VARIABLE + Value + Path
         Add = Literal("Add") + Subject + Predicate + (Object | List)
         Delete = Literal("Delete") + Subject + Predicate + Object

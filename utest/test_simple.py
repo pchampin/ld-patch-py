@@ -64,16 +64,16 @@ class TestSimpleParser(object):
         self.e = None
 
     def test_prefix(self):
-        self.p.parseString("Prefix foo: <http://ex.co/>")
+        self.p.parseString("@prefix foo: <http://ex.co/>")
         eq_(("prefix", "foo", URIRef("http://ex.co/")), self.e.pop())
 
     def test_prefix_unicode(self):
-        self.p.parseString("Prefix Iñtërnâtiônàlizætiøn: <http://ex.co/>")
+        self.p.parseString("@prefix Iñtërnâtiônàlizætiøn: <http://ex.co/>")
         eq_(("prefix", "Iñtërnâtiônàlizætiøn", URIRef("http://ex.co/")),
             self.e.pop())
 
     def test_prefix_empty(self):
-        self.p.parseString("Prefix : <http://ex.co/>")
+        self.p.parseString("@prefix : <http://ex.co/>")
         eq_(("prefix", "", URIRef("http://ex.co/")), self.e.pop())
 
     def test_bind(self):
