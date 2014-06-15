@@ -161,8 +161,8 @@ def parse_slice(s, loc, toks):
 
 class Parser(object):
 
-    def __init__(self, engine):
-        self.reset(engine)
+    def __init__(self, engine, strict=False):
+        self.reset(engine, strict)
         PrefixedName = PNAME_LN | PNAME_NS
         Iri = IRIREF | PrefixedName
         RDFLiteral = STRING \
@@ -211,8 +211,10 @@ class Parser(object):
         UpdateList.setParseAction(self._do_updatelist)
 
 
-    def reset(self, engine):
+    def reset(self, engine, strict=False):
         self.engine = engine
+        self.strict = strict
+        self.in_prologue = True
 
     def _parse_pname(self, s, loc, toks):
         return self.engine.expand_pname(toks.prefix, toks.suffix)
@@ -242,24 +244,34 @@ class Parser(object):
         return engine.PathConstraint(toks.path.asList(), value)
     
     def _do_prefix(self, *args):
+        if self.strict and not self.in_prologue:
+            raise ParserError("Prefix declaration can only appear at the "
+                              "start (in strict mode)")
         s, loc, toks = args[0], args[1], args[2]
         self.engine.prefix(*toks[1:])
 
     def _do_bind(self, s, loc, toks):
+        self.in_prologue = False
         self.engine.bind(*toks[1:])
 
     def _do_add(self, s, loc, toks):
+        self.in_prologue = False
         self.engine.add(*toks[1:])
 
     def _do_delete(self, s, loc, toks):
+        self.in_prologue = False
         self.engine.delete(*toks[1:])
 
     def _do_updatelist(self, s, loc, toks):
+        self.in_prologue = False
         self.engine.updatelist(*toks[1:])
 
     def parseString(self, txt):
+        self.in_prologue = False
         self.grammar.parseString(txt, True)
 
+class ParserError(Exception):
+    pass
 
 # for temporary testing
 from ldpatch.engine import PatchEngine

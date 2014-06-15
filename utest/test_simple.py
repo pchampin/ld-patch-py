@@ -22,7 +22,7 @@ from nose.tools import assert_raises, assert_list_equal, eq_
 from rdflib import BNode, Literal, Namespace, URIRef, Variable as V, XSD
 
 from ldpatch.engine import InvIRI, PathConstraint, Slice, UNICITY_CONSTRAINT
-from ldpatch.simple import Parser
+from ldpatch.simple import Parser, ParserError
 
 EX = Namespace("http://ex.co/")
 
@@ -53,6 +53,18 @@ class DummyEngine(object):
         self.operations.append(("updatelist", subject, predicate, slice, lst))
 
 
+class TestStrictParser(object):
+    def setUp(self):
+        self.e = DummyEngine()
+        self.p = Parser(self.e, True)
+
+    def test_prefix_in_the_middle(self):
+        with assert_raises(ParserError):
+            self.p.parseString("""
+            Add <http://example.org/a> <http://example.org/b>
+                <http://example.org/c> .
+            @prefix ex: <http://exammple.org/>
+            """)
 
 class TestSimpleParser(object):
     def setUp(self):
