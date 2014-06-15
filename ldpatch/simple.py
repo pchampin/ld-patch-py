@@ -109,6 +109,7 @@ VARIABLE = Combine(
 INDEX = Regex(r'[0-9]+')
 UNICITY_CONSTRAINT = Literal('!')
 SLICE = ( INDEX + Optional('>' + Optional(INDEX) ) ) | '>'
+PERIOD = Suppress(".")
 
 
 @IRIREF.setParseAction
@@ -186,10 +187,10 @@ class Parser(object):
             + Suppress(']'))
 
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF
-        Bind = Literal("Bind") + VARIABLE + Value + Path
-        Add = Literal("Add") + Subject + Predicate + (Object | List)
-        Delete = Literal("Delete") + Subject + Predicate + Object
-        Replace = Literal("Replace") + Subject + Predicate + SLICE + List
+        Bind = Literal("Bind") + VARIABLE + Value + Path + PERIOD
+        Add = Literal("Add") + Subject + Predicate + (Object | List) + PERIOD
+        Delete = Literal("Delete") + Subject + Predicate + Object + PERIOD
+        Replace = Literal("Replace") + Subject + Predicate + SLICE + List + PERIOD
 
         Statement = Prefix | Bind | Add | Delete | Replace
         Comment = Suppress(Regex(r'#[^\n]*\n'))
