@@ -92,6 +92,10 @@ class TestSimpleParser(object):
         self.p.parseString("Bind ?x <http://ex.co/a> .")
         eq_(("bind", V("x"), EX.a, []), self.e.pop())
 
+    def test_bind_abbr(self):
+        self.p.parseString("B ?x <http://ex.co/a> .")
+        eq_(("bind", V("x"), EX.a, []), self.e.pop())
+
     def test_bind_path(self):
         self.p.parseString("Bind ?x <http://ex.co/a>/ex:b/-ex:c/42 .")
         eq_(("bind", V("x"), EX.a, [EX.b, InvIRI(EX.c), 42]), self.e.pop())
@@ -114,6 +118,11 @@ class TestSimpleParser(object):
 
     def test_add_iris(self):
         self.p.parseString("Add <http://ex.co/a> <http://ex.co/b> "
+                           "<http://ex.co/c> .")
+        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
+
+    def test_add_abbr(self):
+        self.p.parseString("A <http://ex.co/a> <http://ex.co/b> "
                            "<http://ex.co/c> .")
         eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
 
@@ -185,6 +194,11 @@ class TestSimpleParser(object):
                            "<http://ex.co/c> .")
         eq_(("delete", EX.a, EX.b, EX.c), self.e.pop())
 
+    def test_delete_abbr(self):
+        self.p.parseString("D <http://ex.co/a> <http://ex.co/b> "
+                           "<http://ex.co/c> .")
+        eq_(("delete", EX.a, EX.b, EX.c), self.e.pop())
+
     def test_delete_pnames(self):
         self.p.parseString("Delete ex:a ex:b ex:cde .")
         eq_(("delete", EX.a, EX.b, EX.cde), self.e.pop())
@@ -246,6 +260,12 @@ class TestSimpleParser(object):
 
     def test_updatelist_point(self):
         self.p.parseString("UpdateList ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(3),
+             [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
+            self.e.pop())
+
+    def test_updatelist_abbr(self):
+        self.p.parseString("UL ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
         eq_(("updatelist", V("x"), EX.p, Slice(3),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())

@@ -110,6 +110,10 @@ INDEX = Regex(r'[0-9]+')
 UNICITY_CONSTRAINT = Literal('!')
 SLICE = ( INDEX + Optional('>' + Optional(INDEX) ) ) | '>'
 PERIOD = Suppress(".")
+BIND_CMD = Suppress(Literal("Bind") | Literal("B"))
+ADD_CMD = Suppress(Literal("Add") | Literal("A"))
+DELETE_CMD = Suppress(Literal("Delete") | Literal("D"))
+UPDATELIST_CMD = Suppress(Literal("UpdateList") | Literal("UL"))
 
 
 @IRIREF.setParseAction
@@ -187,10 +191,10 @@ class Parser(object):
             + Suppress(']'))
 
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF
-        Bind = Literal("Bind") + VARIABLE + Value + Path + PERIOD
-        Add = Literal("Add") + Subject + Predicate + (Object | List) + PERIOD
-        Delete = Literal("Delete") + Subject + Predicate + Object + PERIOD
-        UpdateList = Literal("UpdateList") + Subject + Predicate + SLICE + List + PERIOD
+        Bind = BIND_CMD + VARIABLE + Value + Path + PERIOD
+        Add = ADD_CMD + Subject + Predicate + (Object | List) + PERIOD
+        Delete = DELETE_CMD + Subject + Predicate + Object + PERIOD
+        UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + List + PERIOD
 
         Statement = Prefix | Bind | Add | Delete | UpdateList
         Comment = Suppress(Regex(r'#[^\n]*\n'))
@@ -252,19 +256,19 @@ class Parser(object):
 
     def _do_bind(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.bind(*toks[1:])
+        self.engine.bind(*toks)
 
     def _do_add(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.add(*toks[1:])
+        self.engine.add(*toks)
 
     def _do_delete(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.delete(*toks[1:])
+        self.engine.delete(*toks)
 
     def _do_updatelist(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.updatelist(*toks[1:])
+        self.engine.updatelist(*toks)
 
     def parseString(self, txt):
         self.in_prologue = False
