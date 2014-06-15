@@ -49,8 +49,8 @@ class DummyEngine(object):
     def delete(self, subject, predicate, object):
         self.operations.append(("delete", subject, predicate, object))
 
-    def replace(self, subject, predicate, slice, lst):
-        self.operations.append(("replace", subject, predicate, slice, lst))
+    def updatelist(self, subject, predicate, slice, lst):
+        self.operations.append(("updatelist", subject, predicate, slice, lst))
 
 
 
@@ -232,31 +232,31 @@ class TestSimpleParser(object):
         eq_(("delete", EX.a, EX.b, Literal("Iñtërnâtiônàlizætiøn☃💩")),
             self.e.pop())
 
-    def test_replace_point(self):
-        self.p.parseString("Replace ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("replace", V("x"), EX.p, Slice(3),
+    def test_updatelist_point(self):
+        self.p.parseString("UpdateList ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(3),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
-    def test_replace_til_the_end(self):
-        self.p.parseString("Replace ?x ex:p 3> ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("replace", V("x"), EX.p, Slice(3, '>'),
+    def test_updatelist_til_the_end(self):
+        self.p.parseString("UpdateList ?x ex:p 3> ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(3, '>'),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
-    def test_replace_slice(self):
-        self.p.parseString("Replace ?x ex:p 3>7 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("replace", V("x"), EX.p, Slice(3, '>', 7),
+    def test_updatelist_slice(self):
+        self.p.parseString("UpdateList ?x ex:p 3>7 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(3, '>', 7),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
-    def test_replace_at_the_end(self):
-        self.p.parseString("Replace ?x ex:p > ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("replace", V("x"), EX.p, Slice(None, '>'),
+    def test_updatelist_at_the_end(self):
+        self.p.parseString("UpdateList ?x ex:p > ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(None, '>'),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
-    def test_replace_empty(self):
-        self.p.parseString("Replace ?x ex:p 3 () .")
-        eq_(("replace", V("x"), EX.p, Slice(3), []),
+    def test_updatelist_empty(self):
+        self.p.parseString("UpdateList ?x ex:p 3 () .")
+        eq_(("updatelist", V("x"), EX.p, Slice(3), []),
             self.e.pop())

@@ -218,7 +218,7 @@ class PatchEngine(object):
         object= self.get_node(object)
         self._graph.remove((subject, predicate, object))
 
-    def replace(self, subject, predicate, slice, lst):
+    def updatelist(self, subject, predicate, slice, lst):
         graph_value = self._graph.value
         subject = self.get_node(subject)
         predicate = self.get_node(predicate)
@@ -239,7 +239,7 @@ class PatchEngine(object):
                 if current is None:
                     raise MalformedListException()
                 if current == RDF.nil:
-                    raise OutOfBoundReplaceException()
+                    raise OutOfBoundUpdateListException()
                 i += 1
         else:
             while current != RDF.nil:
@@ -290,5 +290,5 @@ class NoSuchListException(Exception):
 class MalformedListException(Exception):
     pass
 
-class OutOfBoundReplaceException(Exception):
+class OutOfBoundUpdateListException(Exception):
     pass

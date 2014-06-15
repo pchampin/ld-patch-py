@@ -190,9 +190,9 @@ class Parser(object):
         Bind = Literal("Bind") + VARIABLE + Value + Path + PERIOD
         Add = Literal("Add") + Subject + Predicate + (Object | List) + PERIOD
         Delete = Literal("Delete") + Subject + Predicate + Object + PERIOD
-        Replace = Literal("Replace") + Subject + Predicate + SLICE + List + PERIOD
+        UpdateList = Literal("UpdateList") + Subject + Predicate + SLICE + List + PERIOD
 
-        Statement = Prefix | Bind | Add | Delete | Replace
+        Statement = Prefix | Bind | Add | Delete | UpdateList
         Comment = Suppress(Regex(r'#[^\n]*\n'))
         Patch = ZeroOrMore(Statement | Comment)
 
@@ -208,7 +208,7 @@ class Parser(object):
         Bind.setParseAction(self._do_bind)
         Add.setParseAction(self._do_add)
         Delete.setParseAction(self._do_delete)
-        Replace.setParseAction(self._do_replace)
+        UpdateList.setParseAction(self._do_updatelist)
 
 
     def reset(self, engine):
@@ -254,8 +254,8 @@ class Parser(object):
     def _do_delete(self, s, loc, toks):
         self.engine.delete(*toks[1:])
 
-    def _do_replace(self, s, loc, toks):
-        self.engine.replace(*toks[1:])
+    def _do_updatelist(self, s, loc, toks):
+        self.engine.updatelist(*toks[1:])
 
     def parseString(self, txt):
         self.grammar.parseString(txt, True)
