@@ -97,11 +97,11 @@ class TestSimpleParser(object):
         eq_(("bind", V("x"), EX.a, []), self.e.pop())
 
     def test_bind_path(self):
-        self.p.parseString("Bind ?x <http://ex.co/a>/ex:b/-ex:c/42 .")
+        self.p.parseString("Bind ?x <http://ex.co/a>/ex:b/^ex:c/42 .")
         eq_(("bind", V("x"), EX.a, [EX.b, InvIRI(EX.c), 42]), self.e.pop())
 
     def test_bind_constrained_path(self):
-        self.p.parseString("Bind ?x <http://ex.co/a> /ex:b!/-ex:c[/ex:b!/-ex:c/42=0]!/42 .")
+        self.p.parseString("Bind ?x <http://ex.co/a> /ex:b!/^ex:c[/ex:b!/^ex:c/42=0]!/42 .")
         eq_(("bind", V("x"), EX.a, [
             EX.b, UNICITY_CONSTRAINT, InvIRI(EX.c),
             PathConstraint([

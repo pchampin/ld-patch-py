@@ -184,7 +184,7 @@ class Parser(object):
         Value = Iri | PatchLiteral | VARIABLE
         List = Group(Suppress('(') + ZeroOrMore(Object) + Suppress(')'))
 
-        InvPredicate = Suppress('-') + Predicate
+        InvPredicate = Suppress('^') + Predicate
         Step = Suppress('/') + (Predicate | InvPredicate | INDEX)
         Filter = Forward()
         Constraint = ( Filter | UNICITY_CONSTRAINT )
