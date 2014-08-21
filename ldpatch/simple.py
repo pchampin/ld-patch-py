@@ -108,7 +108,7 @@ VARIABLE = Combine(
 )
 INDEX = Regex(r'[0-9]+')
 UNICITY_CONSTRAINT = Literal('!')
-SLICE = ( INDEX + Optional('>' + Optional(INDEX) ) ) | '>'
+SLICE = ( INDEX + Optional('..' + Optional(INDEX) ) ) | '..'
 PERIOD = Suppress(".")
 BIND_CMD = Suppress(Literal("Bind") | Literal("B"))
 ADD_CMD = Suppress(Literal("Add") | Literal("A"))
@@ -158,10 +158,14 @@ def parse_unicityconstraint(s, loc, toks):
 
 @SLICE.setParseAction
 def parse_slice(s, loc, toks):
-    if toks[0] == '>':
-        return engine.Slice(None, '>')
-    else:
-        return engine.Slice(*toks)
+    if toks[0] == '..':   # ".."
+        return engine.Slice(None, None)
+    elif len(toks) == 1:  # <index>
+        return engine.Slice(toks[0], toks[0]+1)
+    elif len(toks) == 2:  # <index> ".."
+        return engine.Slice(toks[0], None)
+    else:                 # <index> ".." <index>
+        return engine.Slice(toks[0], toks[2])
 
 class Parser(object):
 

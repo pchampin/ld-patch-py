@@ -260,35 +260,35 @@ class TestSimpleParser(object):
 
     def test_updatelist_point(self):
         self.p.parseString("UpdateList ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3),
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 4),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
     def test_updatelist_abbr(self):
         self.p.parseString("UL ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3),
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 4),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
     def test_updatelist_til_the_end(self):
-        self.p.parseString("UpdateList ?x ex:p 3> ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3, '>'),
+        self.p.parseString("UpdateList ?x ex:p 3.. ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(3, None),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
     def test_updatelist_slice(self):
-        self.p.parseString("UpdateList ?x ex:p 3>7 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3, '>', 7),
+        self.p.parseString("UpdateList ?x ex:p 3..7 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 7),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
     def test_updatelist_at_the_end(self):
-        self.p.parseString("UpdateList ?x ex:p > ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(None, '>'),
+        self.p.parseString("UpdateList ?x ex:p .. ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
+        eq_(("updatelist", V("x"), EX.p, Slice(None, None),
              [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
             self.e.pop())
 
     def test_updatelist_empty(self):
         self.p.parseString("UpdateList ?x ex:p 3 () .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3), []),
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 4), []),
             self.e.pop())

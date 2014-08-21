@@ -53,21 +53,15 @@ class PathConstraint(_PathConstraintBase):
     def __new__(cls, path, value=None):
         return _PathConstraintBase.__new__(cls, path, value)
 
-_SliceBase = namedtuple("Slice", ["idx1", "idx2"])
-class Slice(_SliceBase):
-    """A slice of indexes in a list.
+Slice = namedtuple("Slice", ["idx1", "idx2"])
+""" A slice of indexes in a list.
 
     idx1 == None means "after the end" (idx2 will then be unspecified)
     idx2 == None means "until the end"
-    """
-    def __new__(cls, idx1, sep=None, idx2=None):
-        if sep is None:
-            assert idx1 is not None  and  idx2 is None
-            idx2 = idx1 + 1
-        return _SliceBase.__new__(cls, idx1, idx2)
+"""
 
 class _UnicityConstraintSingleton(object):
-    def __repr__(self):
+    def __repr_(self):
         return "UNICITY_CONSTRAINT"
 UNICITY_CONSTRAINT = _UnicityConstraintSingleton()
 

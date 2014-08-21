@@ -9,6 +9,6 @@ Prefix v: <http://example.org/vocab#>
 Bind ?pa <http://champin.net/#pa>
 
 # first remove all elements from the list...
-Replace ?pa v:prefLang 0> ()
+UpdateList ?pa v:prefLang 0.. ()
 # ... then delete the remaining arc
 Delete ?pa v:prefLang rdf:nil

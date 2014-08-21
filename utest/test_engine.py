@@ -334,137 +334,137 @@ class TestPatchEngine(object):
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_item(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1), [ Literal("en-US") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("en-US") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr" "en-US" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_first_item(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0), [ Literal("fr-FR") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 1), [ Literal("fr-FR") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr-FR" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_last_item(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(2), [ Literal("TLH") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(2, 3), [ Literal("TLH") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr" "en" "TLH" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_item_with_several(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1), [ Literal("en-US"), Literal("en-GB") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("en-US"), Literal("en-GB") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en-US" "en-GB" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_first_item_with_several(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0), [ Literal("fr-FR"), Literal("fr-BE") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 1), [ Literal("fr-FR"), Literal("fr-BE") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr-FR" "fr-BE" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_last_item_with_several(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(2), [ Literal("tlh-k1"), Literal("tlh-k2") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(2, 3), [ Literal("tlh-k1"), Literal("tlh-k2") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en" "tlh-k1" "tlh-k2" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_item_with_none(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1), [])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_first_item_with_none(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0), [])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 1), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_last_item_with_none(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(2), [])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(2, 3), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_insert_begin(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, '>', 0), [ Literal("a"), Literal("b") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 0), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "a" "b" "fr" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_insert_middle(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, '>', 1), [ Literal("a"), Literal("b") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 1), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "a" "b" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_insert_end(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(None, '>'), [ Literal("a"), Literal("b") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(None, None), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en" "tlh" "a" "b")"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_begin(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, '>', 2), [])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 2), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_middle(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, '>', 2), [])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_end(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, '>'), [])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_all(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, '>'), [])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """()"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_begin(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, '>', 2), [ Literal("a"), Literal("b") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 2), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "a" "b" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_middle(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, '>', 2), [ Literal("a"), Literal("b") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "a" "b" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_end(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, '>'), [ Literal("a"), Literal("b") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, None), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "a" "b" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_all(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, '>'), [ Literal("a"), Literal("b") ])
+        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, None), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "a" "b" )"""))
         got = self.g
