@@ -3,7 +3,7 @@
 ===========
 
 This project aims at implementing patch format for Linked Data,
-as specified at http://ld-specs.github.io/ld-patch/ .
+as specified at http://www.w3.org/TR/ldpatch .
 
 It was first inspired by the RDF-Patch_ proposal,
 but it aims at being able to cope with most RDF graph
