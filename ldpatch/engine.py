@@ -266,23 +266,25 @@ class PatchEngine(object):
 
 
 
+class PatchEvalError(Exception):
+    pass
 
-class NoUniqueMatch(Exception):
+class NoUniqueMatch(PatchEvalError):
     def __init__(self, nodeset):
         Exception.__init__(self, "{!r}".format(nodeset))
         self.nodeset = nodeset
 
-class UnboundVariableError(Exception):
+class UnboundVariableError(PatchEvalError):
     pass
 
-class UndefinedPrefixError(Exception):
+class UndefinedPrefixError(PatchEvalError):
     pass
 
-class NoSuchListException(Exception):
+class NoSuchListException(PatchEvalError):
     pass
 
-class MalformedListException(Exception):
+class MalformedListException(PatchEvalError):
     pass
 
-class OutOfBoundUpdateListException(Exception):
+class OutOfBoundUpdateListException(PatchEvalError):
     pass
