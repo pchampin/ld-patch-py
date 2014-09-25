@@ -275,7 +275,6 @@ class Parser(object):
         self.engine.updatelist(*toks)
 
     def parseString(self, txt):
-        self.in_prologue = False
         self.grammar.parseString(txt, True)
 
 class ParserError(Exception):
