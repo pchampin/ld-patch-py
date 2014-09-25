@@ -37,7 +37,7 @@ To prevent re-generating the grammar for each new ldpatch,
 Parser has a ``reset`` method that allows to restart it afresh.
 
 """
-from pyparsing import And, Combine, Forward, Group, Literal, OneOrMore, Optional, quotedString, Regex, Suppress, ZeroOrMore
+from pyparsing import And, Combine, Forward, Group, Literal, OneOrMore, Optional, ParseException, quotedString, Regex, Suppress, ZeroOrMore
 
 import rdflib
 
@@ -275,7 +275,10 @@ class Parser(object):
         self.engine.updatelist(*toks)
 
     def parseString(self, txt):
-        self.grammar.parseString(txt, True)
+        try:
+            self.grammar.parseString(txt, True)
+        except ParseException, ex:
+            raise ParserError(ex)
 
 class ParserError(Exception):
     pass
