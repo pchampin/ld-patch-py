@@ -32,11 +32,13 @@ except ImportError, ex:
     path.append(SOURCE_DIR)
     import ldpatch
 
-if len(argv) != 2 or "--help" in argv:
-    print "usage: %s <patch-file>" % argv[0]
-    print "  reads a Turtle file from stdin,"
+if len(argv) not in (2, 3) or "--help" in argv:
+    print "usage: %s <patch-file> [<base-iri>]" % argv[0]
+    print "  Reads a Turtle file from stdin,"
     print "  applies it LD-Patch from <patch-file>,"
-    print "  and outputs the resulting graph in Turtle on stdout"
+    print "  and outputs the resulting graph in Turtle on stdout."
+    print "  Relative URIs in the patch are resolved against <base-iri> if provided,"
+    print "  otherwise agains the URI of the patch itself."
     exit(-1)
 
 from rdflib import Graph
@@ -45,7 +47,12 @@ from ldpatch import apply
 g = Graph()
 g.load(stdin, format="turtle")
 
+if len(argv) == 3:
+    baseiri = argv[2]
+else:
+    baseiri = None
+
 with open(argv[1]) as f:
-    apply(f, g)
+    apply(f, g, baseiri)
 
 g.serialize(stdout, format="turtle")

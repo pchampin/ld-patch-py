@@ -56,7 +56,7 @@ class DummyEngine(object):
 class TestStrictParser(object):
     def setUp(self):
         self.e = DummyEngine()
-        self.p = Parser(self.e, True)
+        self.p = Parser(self.e, EX[''], True)
 
     def test_prefix_in_the_middle(self):
         with assert_raises(ParserError):
@@ -69,7 +69,7 @@ class TestStrictParser(object):
 class TestSimpleParser(object):
     def setUp(self):
         self.e = DummyEngine()
-        self.p = Parser(self.e)
+        self.p = Parser(self.e, EX[''])
 
     def tearDown(self):
         self.p = None
@@ -90,6 +90,10 @@ class TestSimpleParser(object):
 
     def test_bind(self):
         self.p.parseString("Bind ?x <http://ex.co/a> .")
+        eq_(("bind", V("x"), EX.a, []), self.e.pop())
+
+    def test_bind_relative(self):
+        self.p.parseString("Bind ?x <a> .")
         eq_(("bind", V("x"), EX.a, []), self.e.pop())
 
     def test_bind_abbr(self):

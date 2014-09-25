@@ -17,9 +17,14 @@
 #    You should have received a copy of the GNU Lesser General Public License
 #    along with RDF-PATCH.  If not, see <http://www.gnu.org/licenses/>.
 
-def apply(patch, graph, init_ns=None, init_var=None, syntax="simple"):
+from os.path import abspath
+from urllib import pathname2url
+
+def apply(patch, graph, baseiri=None, init_ns=None, init_var=None, syntax="simple"):
     """
     I parse `patch` (either a file-like or a string), and apply it to `graph`.
+
+    NB: if patch is a string, baseiri must be provided
 
     Other parameters:
     * `init_ns`: initial namespace binding
@@ -31,8 +36,16 @@ def apply(patch, graph, init_ns=None, init_var=None, syntax="simple"):
     else:
         raise ValueError("Unknown LD-Patch syntax {}".format())
 
+    if baseiri is None:
+        if hasattr(patch, "geturl"):
+            baseiri = patch.geturl()
+        elif hasattr(patch, "name"):
+            baseiri = "file://" + pathname2url(abspath(patch.name))
+        else:
+            raise ValueError("Can not guess base-uri")
+
     if hasattr(patch, "read"):
         patch = patch.read()
 
     from .engine import PatchEngine
-    Parser(PatchEngine(graph, init_ns, init_var)).parseString(patch)
+    Parser(PatchEngine(graph, init_ns, init_var), baseiri).parseString(patch)

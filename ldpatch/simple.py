@@ -116,10 +116,6 @@ DELETE_CMD = Suppress(Literal("Delete") | Literal("D"))
 UPDATELIST_CMD = Suppress(Literal("UpdateList") | Literal("UL"))
 
 
-@IRIREF.setParseAction
-def parse_iri(s, loc, toks):
-    return rdflib.URIRef(toks[0][1:-1])
-
 @BLANK_NODE_LABEL.setParseAction
 def parse_bnode(s, loc, toks):
     return rdflib.BNode(toks[0][2:])
@@ -169,8 +165,8 @@ def parse_slice(s, loc, toks):
 
 class Parser(object):
 
-    def __init__(self, engine, strict=False):
-        self.reset(engine, strict)
+    def __init__(self, engine, baseiri, strict=False):
+        self.reset(engine, baseiri, strict)
         PrefixedName = PNAME_LN | PNAME_NS
         Iri = IRIREF | PrefixedName
         RDFLiteral = STRING \
@@ -206,6 +202,7 @@ class Parser(object):
 
         self.grammar = Patch
 
+        IRIREF.setParseAction(self._parse_iri)
         PrefixedName.setParseAction(self._parse_pname)
         RDFLiteral.setParseAction(self._parse_turtleliteral)
         List.setParseAction(self._parse_list)
@@ -219,10 +216,14 @@ class Parser(object):
         UpdateList.setParseAction(self._do_updatelist)
 
 
-    def reset(self, engine, strict=False):
+    def reset(self, engine, baseiri, strict=False):
         self.engine = engine
+        self.baseiri = rdflib.URIRef(baseiri)
         self.strict = strict
         self.in_prologue = True
+
+    def _parse_iri(self, s, loc, toks):
+        return rdflib.URIRef(toks[0][1:-1], self.baseiri)
 
     def _parse_pname(self, s, loc, toks):
         return self.engine.expand_pname(toks.prefix, toks.suffix)
@@ -282,9 +283,3 @@ class Parser(object):
 
 class ParserError(Exception):
     pass
-
-# for temporary testing
-from ldpatch.engine import PatchEngine
-g = rdflib.Graph()
-e = PatchEngine(g, init_ns={"xsd": rdflib.XSD})
-p = Parser(e)
