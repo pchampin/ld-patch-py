@@ -52,40 +52,27 @@ PN_CHARS_BASE= Regex(ur'[A-Z]|[a-z]|[\u00C0-\u00D6]|[\u00D8-\u00F6]|[\u00F8-\u02
 PN_CHARS_U = PN_CHARS_BASE | '_'
 PN_CHARS = PN_CHARS_U | '-' | Regex(ur'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u2040]')
 
+# NB: PN_PREFIX, PN_LOCAL and BLANK_NODE_LABEL are defined
+# in a slightly different way than in the SPARQL grammar,
+# to accomodate for the greedy parsing of pyparsing;
+# it should nonetheless be equivalent
 #    A ( (B|'.')* B )?
-# However, these rules do not work as is in PyParsing, which greedily matches B|'.'
-# and then fails to match the final B.
 
-#PN_PREFIX = Combine(
-#    PN_CHARS_BASE
-#    + Optional(ZeroOrMore(PN_CHARS | '.') + PN_CHARS)
-#)
-#PN_LOCAL = Combine(
-#    (PN_CHARS_U | ':' | Regex('[0-9]') | PLX)
-#    + Optional(ZeroOrMore(PN_CHARS | '.' | ':' | PLX)
-#               + (PN_CHARS | ':' | PLX))
-#)("suffix")
-#BLANK_NODE_LABEL = Combine(
-#    '_:'
-#    + ( PN_CHARS_U | Regex('[0-9]') )
-#    + Optional(ZeroOrMore(PN_CHARS|'.') + PN_CHARS)
-#)
-
-# We replace them with a version allowing '.' at the end,
-# which would be a problem in Turtle, but not in LD-Patch anyway.
-# So it might be better to find a correct way to implement it in PyParsing,
-# or we could live with this approximation...
-
-PN_PREFIX = Combine(PN_CHARS_BASE + ZeroOrMore(PN_CHARS | '.'))("prefix")
+PN_PREFIX = Combine(
+    PN_CHARS_BASE
+    + ZeroOrMore(PN_CHARS)
+    + ZeroOrMore('.' + ZeroOrMore(PN_CHARS))
+)("prefix")
 PN_LOCAL = Combine(
     (PN_CHARS_U | ':' | Regex('[0-9]') | PLX)
-    + ZeroOrMore(PN_CHARS | '.' | ':' | PLX)
+    + ZeroOrMore(PN_CHARS | ':' | PLX)
+    + ZeroOrMore('.' + ZeroOrMore(PN_CHARS | ':' | PLX))
 )("suffix")
-
 BLANK_NODE_LABEL = Combine(
     '_:'
     + ( PN_CHARS_U | Regex('[0-9]') )
-    + ZeroOrMore(PN_CHARS|'.')
+    + ZeroOrMore(PN_CHARS)
+    + ZeroOrMore('.' + ZeroOrMore(PN_CHARS))
 )
 
 PNAME_NS = Optional(PN_PREFIX, "") + Suppress(':')
