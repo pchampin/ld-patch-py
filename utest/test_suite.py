@@ -95,7 +95,7 @@ if exists(TESTSUITE_PATH):
                     parser = Parser(engine, base_iri, True)
                     parser.parseString(patch)
                     assert isomorphic(data, result), \
-                        got.serialize(format="turtle")
+                        data.serialize(format="turtle")
             elif etype == ns.NegativeEvaluationTest:
                 def test_X(self, entry=entry):
                     action = get_value(entry, mf.action)
