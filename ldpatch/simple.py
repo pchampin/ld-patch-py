@@ -37,7 +37,7 @@ To prevent re-generating the grammar for each new ldpatch,
 Parser has a ``reset`` method that allows to restart it afresh.
 
 """
-from pyparsing import And, Combine, Forward, Group, Literal, OneOrMore, Optional, ParseException, quotedString, Regex, Suppress, ZeroOrMore
+from pyparsing import And, Combine, Forward, Group, Literal, OneOrMore, Optional, ParseException, quotedString, Regex, restOfLine, Suppress, ZeroOrMore
 
 import rdflib
 
@@ -184,8 +184,8 @@ class Parser(object):
         UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + List + PERIOD
 
         Statement = Prefix | Bind | Add | Delete | UpdateList
-        Comment = Suppress(Regex(r'#[^\n]*\n'))
-        Patch = ZeroOrMore(Statement | Comment)
+        Patch = ZeroOrMore(Statement)
+        Patch.ignore('#' + restOfLine) # Comment
 
         self.grammar = Patch
 

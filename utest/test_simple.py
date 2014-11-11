@@ -34,6 +34,9 @@ class DummyEngine(object):
     def pop(self):
         return self.operations.pop()
 
+    def is_empty(self):
+        return len(self.operations) == 0
+
     def expand_pname(self, prefix, suffix=""):
         return URIRef(EX[suffix])
 
@@ -296,3 +299,23 @@ class TestSimpleParser(object):
         self.p.parseString("UpdateList ?x ex:p 3 () .")
         eq_(("updatelist", V("x"), EX.p, Slice(3, 4), []),
             self.e.pop())
+
+
+    def test_add_multiline(self):
+        self.p.parseString("Add\n"
+                           "  <http://ex.co/a>\n"
+                           "    <http://ex.co/b>\n"
+                           "      <http://ex.co/c> .")
+        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
+
+    def test_comment(self):
+        self.p.parseString("# hello world\n")
+        self.e.is_empty()
+
+    def test_comment_in_the_middle(self):
+        self.p.parseString("Add\n"
+                           "  <http://ex.co/a>\n"
+                           "  # hello world\n"
+                           "    <http://ex.co/b>\n"
+                           "      <http://ex.co/c> .")
+        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
