@@ -37,12 +37,15 @@ To prevent re-generating the grammar for each new ldpatch,
 Parser has a ``reset`` method that allows to restart it afresh.
 
 """
-from pyparsing import And, Combine, Forward, Group, Literal, OneOrMore, Optional, ParseException, quotedString, Regex, restOfLine, Suppress, ZeroOrMore
+from pyparsing import And, Combine, Forward, Group, Keyword, Literal, OneOrMore, Optional, ParseException, quotedString, Regex, restOfLine, Suppress, ZeroOrMore
 
 import rdflib
+from rdflib.collection import Collection as RdfCollection
 
 import engine
+from rdflib.term import BNode
 
+RDF_NIL = rdflib.RDF.nil
 
 # the following rules are from the SPARQL syntax
 # http://www.w3.org/TR/2013/REC-sparql11-query-20130321/
@@ -61,18 +64,18 @@ PN_CHARS = PN_CHARS_U | '-' | Regex(ur'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u20
 PN_PREFIX = Combine(
     PN_CHARS_BASE
     + ZeroOrMore(PN_CHARS)
-    + ZeroOrMore('.' + ZeroOrMore(PN_CHARS))
+    + ZeroOrMore(OneOrMore('.') + OneOrMore(PN_CHARS))
 )("prefix")
 PN_LOCAL = Combine(
     (PN_CHARS_U | ':' | Regex('[0-9]') | PLX)
     + ZeroOrMore(PN_CHARS | ':' | PLX)
-    + ZeroOrMore('.' + ZeroOrMore(PN_CHARS | ':' | PLX))
+    + ZeroOrMore(OneOrMore('.') + OneOrMore(PN_CHARS | ':' | PLX))
 )("suffix")
 BLANK_NODE_LABEL = Combine(
     '_:'
     + ( PN_CHARS_U | Regex('[0-9]') )
     + ZeroOrMore(PN_CHARS)
-    + ZeroOrMore('.' + ZeroOrMore(PN_CHARS))
+    + ZeroOrMore(OneOrMore('.') + OneOrMore(PN_CHARS))
 )
 
 PNAME_NS = Optional(PN_PREFIX, "") + Suppress(':')
@@ -87,6 +90,7 @@ DOUBLE = Regex(r'[+-]?[0-9]+\.[0-9]*|[+-]?\.?[0-9]+|[+-]?\.?[0-9]+') + EXPONENT
 NUMERIC_LITERAL = DOUBLE | DECIMAL | INTEGER
 BOOLEAN_LITERAL = Regex(r'true|false')
 ANON = Literal("[") + Literal("]")
+NIL = Literal("(") + Literal(")")
 
 # other context-independant rules
 VARIABLE = Combine(
@@ -150,6 +154,11 @@ def parse_slice(s, loc, toks):
     else:                 # <index> ".." <index>
         return engine.Slice(toks[0], toks[2])
 
+@NIL.setParseAction
+def parse_nil(s, loc, toks):
+    return RDF_NIL
+
+
 class Parser(object):
 
     def __init__(self, engine, baseiri, strict=False):
@@ -161,11 +170,35 @@ class Parser(object):
         PatchLiteral = RDFLiteral | NUMERIC_LITERAL | BOOLEAN_LITERAL
         BNode = BLANK_NODE_LABEL | ANON
 
+        # BEGIN imported from http://www.w3.org/TR/sparql11-query/#grammar
+        # and adapted to some point
+        # TODO re-order that
+        Verb = VARIABLE | Iri | Keyword('a')
+        GraphTerm = Iri | PatchLiteral | BNode | NIL
+        VarOrTerm = VARIABLE | GraphTerm
+        GraphNode = Forward()
+        Collection = Group(Suppress('(') + OneOrMore(GraphNode) + Suppress(')'))
+        BlankNodePropertyList = Forward()
+        TriplesNode = Collection | BlankNodePropertyList
+        GraphNode << (VarOrTerm | TriplesNode)
+        Object = GraphNode
+        ObjectList = Object + ZeroOrMore(Suppress(',') + Object)
+        PropertyListNotEmpty = Verb + Group(ObjectList) + \
+                               ZeroOrMore(Suppress(';') + Optional(Verb + Group(ObjectList)))
+        BlankNodePropertyList << Suppress('[') + PropertyListNotEmpty + \
+                                Suppress(']')
+        PropertyList = Optional(PropertyListNotEmpty)
+        TriplesSameSubject = (VarOrTerm + PropertyListNotEmpty) \
+                             | ( TriplesNode +  PropertyList )
+        TriplesTemplate = Forward()
+        TriplesTemplate << TriplesSameSubject +\
+                           Optional(PERIOD + Optional(TriplesTemplate))
+        # END imported
+
         Subject = Iri | BNode | VARIABLE
         Predicate = Iri
-        Object = Iri | BNode | PatchLiteral | VARIABLE
         Value = Iri | PatchLiteral | VARIABLE
-        List = Group(Suppress('(') + ZeroOrMore(Object) + Suppress(')'))
+        List = Collection | NIL
 
         InvPredicate = Suppress('^') + Predicate
         Step = Suppress('/') + (Predicate | InvPredicate | INDEX)
@@ -179,8 +212,8 @@ class Parser(object):
 
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Path + PERIOD
-        Add = ADD_CMD + Subject + Predicate + (Object | List) + PERIOD
-        Delete = DELETE_CMD + Subject + Predicate + Object + PERIOD
+        Add = ADD_CMD + Suppress("{") + Optional(TriplesTemplate) + Suppress("}") + PERIOD
+        Delete = DELETE_CMD + Suppress("{") + Optional(TriplesTemplate) + Suppress("}") + PERIOD
         UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + List + PERIOD
 
         Statement = Prefix | Bind | Add | Delete | UpdateList
@@ -192,22 +225,37 @@ class Parser(object):
         IRIREF.setParseAction(self._parse_iri)
         PrefixedName.setParseAction(self._parse_pname)
         RDFLiteral.setParseAction(self._parse_turtleliteral)
-        List.setParseAction(self._parse_list)
         InvPredicate.setParseAction(self._parse_invpredicate)
         Filter.setParseAction(self._parse_filter)
-        Path.setParseAction(self._parse_list)
+        Path.setParseAction(self._parse_as_list)
         Prefix.setParseAction(self._do_prefix)
         Bind.setParseAction(self._do_bind)
         Add.setParseAction(self._do_add)
         Delete.setParseAction(self._do_delete)
         UpdateList.setParseAction(self._do_updatelist)
 
+        # TODO reorder that
+        Verb.setParseAction(self._parse_verb)
+        Collection.setParseAction(self._parse_collection)
+        ObjectList.setParseAction(self._parse_as_list)
+        BlankNodePropertyList.setParseAction(self._parse_bnpl)
+        TriplesSameSubject.setParseAction(self._parse_tss)
+
 
     def reset(self, engine, baseiri, strict=False):
         self.engine = engine
+        self._current_graph = None
         self.baseiri = rdflib.URIRef(baseiri)
         self.strict = strict
         self.in_prologue = True
+
+    def get_current_graph(self, clear=False):
+        ret = self._current_graph
+        if ret is None:
+            self._current_graph = ret = rdflib.Graph()
+        if clear:
+            self._current_graph = None
+        return ret
 
     def _parse_iri(self, s, loc, toks):
         return rdflib.URIRef(toks[0][1:-1], self.baseiri)
@@ -226,8 +274,15 @@ class Parser(object):
             datatype = None
         return rdflib.Literal(toks[0][1:-1], langtag, datatype)
 
-    def _parse_list(self, s, loc, toks):
+    def _parse_as_list(self, s, loc, toks):
         return toks.asList()
+
+    def _parse_collection(self, s, loc, toks):
+        graph = self.get_current_graph()
+        head = BNode()
+        col = RdfCollection(graph, head, toks.asList()[0])
+        return head
+
 
     def _parse_invpredicate(self, s, loc, toks):
         return engine.InvIRI(toks[0])
@@ -252,15 +307,54 @@ class Parser(object):
 
     def _do_add(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.add(*toks)
+        assert not toks, toks
+        self.engine.add(self.get_current_graph(clear=True))
 
     def _do_delete(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.delete(*toks)
+        assert not toks, toks
+        graph = rdflib.Graph()
+        self.engine.delete(self.get_current_graph(clear=True))
 
     def _do_updatelist(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.updatelist(*toks)
+        self.engine.updatelist(self.get_current_graph(clear=True), *toks)
+
+
+    # TODO reorder that
+
+    def _parse_bnpl(self, s, loc, toks):
+        graph = self.get_current_graph()
+        add = graph.add
+        subj = rdflib.BNode()
+        property_list = iter(toks)
+        for pred in property_list:
+            objlist = property_list.next()
+            for obj in objlist:
+                add((subj, pred, obj))
+        return subj
+
+    def _parse_tss(self, s, loc, toks):
+        graph = self.get_current_graph()
+        add = graph.add
+        property_list = iter(toks.asList())
+        subj = property_list.next()
+        for pred in property_list:
+            objlist = property_list.next()
+            for obj in objlist:
+                add((subj, pred, obj))
+        return []
+
+
+    def _parse_verb(self, s, loc, toks):
+        if toks[0] == "a":
+            return rdflib.RDF.type
+        else:
+            return toks
+
+    # END TODO
+
+
 
     def parseString(self, txt):
         try:

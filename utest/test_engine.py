@@ -21,8 +21,9 @@ from os.path import dirname
 sys.path.append(dirname(dirname(__file__)))
 
 from nose.tools import assert_raises, assert_set_equal, eq_
-from rdflib import Graph, Namespace
+from rdflib import BNode as B, Graph, Namespace, Variable as V
 from rdflib.compare import isomorphic
+from rdflib.collection import Collection
 from unittest import skip
 
 from ldpatch.engine import *
@@ -54,7 +55,9 @@ INITIAL = """
 
 _:ucbl
     f:name "Université Claude Bernard Lyon 1" ;
-    f:member <http://champin.net/#pa> .
+    f:member <http://champin.net/#pa>, _:am .
+
+_:am f:name "Alain Mille" .
 """
 
 VOCAB = Namespace("http://example.org/vocab#")
@@ -63,11 +66,14 @@ PA = IRI("http://champin.net/#pa")
 
 def G(data):
     g = Graph()
-    g.parse(data=data, format="turtle")
+    if type(data) is list:
+        g_add = g.add
+        for i in data: g_add(i)
+    else:
+        g.parse(data=data, format="turtle")
     return g
 
 V = Variable
-PN = PrefixedName
 
 class TestPatchEngine(object):
     def setUp(self):
@@ -81,6 +87,21 @@ class TestPatchEngine(object):
         self.e = None
         self.g = None
 
+    # intermediate method
+
+    def _my_updatelist(self, subj, pred, slice, items):
+        """
+        I expose a simpler interface than PatchEngine.updatelist
+        """
+        graph_lst = Graph()
+        if len(items) == 0:
+            lst = RDF.nil
+        else:
+            lst = BNode()
+            Collection(graph_lst, lst, items)
+            assert len(graph_lst) == 2*len(items), graph_lst.serialize(format="n3")
+        return self.e.updatelist(graph_lst, subj, pred, slice, lst)
+
     # testing utility methods
 
     def test_getnode_variable_unbound(self):
@@ -90,13 +111,6 @@ class TestPatchEngine(object):
     def test_getnode_variable(self):
         self.e = PatchEngine(self.g, init_vars={V("x"): PA})
         eq_(PA, self.e.get_node(V("x")))
-
-    def test_getnode_pname_undefined(self):
-        with assert_raises(UndefinedPrefixError):
-            self.e.get_node(PN("dc", "Person"))
-
-    def test_getnode_pname(self):
-        eq_(FOAF.Person, self.e.get_node(PN("foaf", "Person")))
 
     def test_getnode_bnode_same_twice(self):
         bnid = BNode()
@@ -134,17 +148,6 @@ class TestPatchEngine(object):
 
     def test_dopathstep_iri_partial_match(self):
         eq_(1, len(self.e.do_path_step(self.my_friends, VOCAB.prefLang)))
-
-    def test_dopathstep_pname_one_start(self):
-        assert_set_equal(self.my_friends,
-                         self.e.do_path_step({PA}, PN("foaf", "knows")))
-
-    def test_dopathstep_pname_several_starts(self):
-        assert_set_equal({Literal("Alexandre Bertails"), Literal("Andrei Sambra")},
-                         self.e.do_path_step(self.my_friends, PN("foaf", "name")))
-
-    def test_dopathstep_pname_partial_match(self):
-        eq_(1, len(self.e.do_path_step(self.my_friends, PN("vocab", "prefLang"))))
 
     def test_dopathstep_inv_one_start(self):
         assert_set_equal({self.ucbl},
@@ -207,12 +210,12 @@ class TestPatchEngine(object):
 
     def test_prefix_once(self):
         self.e.prefix("foo", IRI(FOAF))
-        eq_(FOAF.Person, self.e.get_node(PN("foo", "Person")))
+        eq_(FOAF.Person, self.e.expand_pname("foo", "Person"))
 
     def test_prefix_twice(self):
         self.e.prefix("foo", IRI(FOAF))
         self.e.prefix("foo", IRI(VOCAB))
-        eq_(VOCAB.Person, self.e.get_node(PN("foo", "Person")))
+        eq_(VOCAB.Person, self.e.expand_pname("foo", "Person"))
 
     def test_bind_once(self):
         self.e.bind(V("foo"), VOCAB.foo, [])
@@ -233,92 +236,128 @@ class TestPatchEngine(object):
 
     def test_bind_from_variable(self):
         self.e.bind(V("ucbl"), PA, [InvIRI(FOAF.member) ])
-        self.e.bind(V("pa"), V("ucbl"), [FOAF.member])
+        self.e.bind(V("pa"), V("ucbl"), [
+            FOAF.member,
+            PathConstraint([FOAF.name], Literal("Pierre-Antoine Champin")),
+        ])
         eq_(PA, self.e.get_node(V("pa")))
 
     def test_add_simple(self):
-        self.e.add(PA, RDF.type, FOAF.Person)
+        self.e.add(G([(PA, RDF.type, FOAF.Person)]))
         exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    def test_add_list(self):
-        self.e.add(PA, VOCAB.favNumbers, [ Literal(i) for i in (42, 7, 2, 10) ])
+    def test_add_complex(self):
+        g2add = G([(PA, VOCAB.favNumbers, B("l1"))])
+        Collection(g2add, B("l1"), [ Literal(i) for i in (42, 7, 2, 10) ])
+        self.e.add(g2add)
         exp = G(INITIAL + """<http://champin.net/#pa> v:favNumbers (42 7 2 10) .""")
-        got = self.g
-        assert isomorphic(got, exp), got.serialize(format="turtle")
-
-    def test_add_pname_subject(self):
-        self.e.add(PN("vocab", "alice"), FOAF.knows, PA)
-        exp = G(INITIAL + """v:alice f:knows <http://champin.net/#pa>.""")
-        got = self.g
-        assert isomorphic(got, exp), got.serialize(format="turtle")
-
-    def test_add_pname_predicate(self):
-        self.e.add(PA, PN("foaf", "nickname"), Literal("pchampin"))
-        exp = G(INITIAL + """<http://champin.net/#pa> f:nickname "pchampin".""")
-        got = self.g
-        assert isomorphic(got, exp), got.serialize(format="turtle")
-
-    def test_add_pname_object(self):
-        self.e.add(PA, RDF.type, PN("foaf", "Person"))
-        exp = G(INITIAL + """<http://champin.net/#pa> a f:Person.""")
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_add_variable_subject(self):
         self.e.bind(V("s"), PA, [InvIRI(FOAF.member)])
-        self.e.add(V("s"), FOAF.homepage, IRI("http://www.univ-lyon1.fr/"))
+        self.e.add(G([
+            (V("s"), FOAF.homepage, IRI("http://www.univ-lyon1.fr/")),
+        ]))
         exp = G(INITIAL + """_:ucbl f:homepage <http://www.univ-lyon1.fr/>.""")
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_add_variable_object(self):
         self.e.bind(V("o"), PA, [InvIRI(FOAF.member)])
-        self.e.add(PA, VOCAB.memberOf, V("o"))
+        self.e.add(G([(PA, VOCAB.memberOf, V("o")),]))
         exp = G(INITIAL + """<http://champin.net/#pa> v:memberOf _:ucbl.""")
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
+    def test_add_one_variable_multiple_times(self):
+        self.e.bind(V("x"), PA, [InvIRI(FOAF.member)])
+        self.e.add(G([
+            (V("x"), FOAF.homepage, IRI("http://www.univ-lyon1.fr/")),
+            (PA    , FOAF.knows,    IRI("http://doe.org/#john")),
+            (IRI("http://doe.org/#john"), VOCAB.memberOf, V("x")),
+        ]))
+        exp = G(INITIAL + """
+            _:ucbl f:homepage <http://www.univ-lyon1.fr/> .
+            <http://champin.net/#pa> f:knows <http://doe.org/#john> .
+            <http://doe.org/#john> v:memberOf _:ucbl .
+        """)
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
+    def test_add_two_variables_multiple_times(self):
+        self.e.bind(V("x"), PA, [InvIRI(FOAF.member)])
+        self.e.bind(V("y"), Literal("Alain Mille"), [InvIRI(FOAF.name)])
+        self.e.add(G([
+            (V("x"), FOAF.homepage, IRI("http://www.univ-lyon1.fr/")),
+            (PA    , FOAF.knows,    V("y")),
+            (V("y"), VOCAB.memberOf, V("x")),
+        ]))
+        exp = G(INITIAL + """
+            _:ucbl f:homepage <http://www.univ-lyon1.fr/> .
+            <http://champin.net/#pa> f:knows _:am .
+            _:am v:memberOf _:ucbl .
+        """)
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
     def test_add_bnode(self):
-        mytwitter = BNode()
-        self.e.add(PA, FOAF.holdsAccount, mytwitter)
-        self.e.add(mytwitter, FOAF.accountName, Literal("pchampin"))
+        # deliberately reusing a BNode label from the original graph ('ucbl'),
+        # to check that a fresh bnode is nonetheless created
+        mytwitter = BNode("ucbl")
+        self.e.add(G([
+            (PA, FOAF.holdsAccount, mytwitter),
+            (mytwitter, FOAF.accountName, Literal("pchampin")),
+        ]))
         exp = G(INITIAL + """<http://champin.net/#pa> f:holdsAccount [ """
                           """    f:accountName "pchampin"\n].""")
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
+    def test_add_two_bnodes(self):
+        # check that distinct bnodes in the source graph
+        # generate distinct fresh bnodes in the target graph ;
+        # as above, try to mess with existing bnode labels to check robustness
+        jdoe = BNode("ucbl")
+        jdup = BNode("am")
+        self.e.add(G([
+            (PA, FOAF.knows, jdoe),
+            (jdoe, FOAF.givenName, Literal("John")),
+            (jdoe, FOAF.familyName, Literal("Doe")),
+            (PA, FOAF.knows, jdup),
+            (jdup, FOAF.givenName, Literal("Jeanne")),
+            (jdup, FOAF.familyName, Literal("Dupont")),
+        ]))
+        exp = G(INITIAL + """
+            <http://champin.net/#pa> f:knows
+                [
+                    f:givenName "John" ;
+                    f:familyName "Doe" ;
+                ],
+                [
+                    f:givenName "Jeanne" ;
+                    f:familyName "Dupont" ;
+                ];
+            .
+        """)
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
     def test_delete_simple(self):
-        self.e.delete(PA, FOAF.name, Literal("Pierre-Antoine Champin"))
+        self.e.delete(G([
+            (PA, FOAF.name, Literal("Pierre-Antoine Champin")),
+        ]))
         exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
-        got = self.g
-        assert isomorphic(got, exp), got.serialize(format="turtle")
-
-    def test_delete_pname_subject(self):
-        self.e.prefix("c", IRI("http://champin.net/#"))
-        self.e.delete(PN("c", "pa"), FOAF.name, Literal("Pierre-Antoine Champin"))
-        exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
-        got = self.g
-        assert isomorphic(got, exp), got.serialize(format="turtle")
-
-    def test_delete_pname_predicate(self):
-        self.e.delete(PA, PN("foaf", "name"), Literal("Pierre-Antoine Champin"))
-        exp = G(INITIAL.replace("""f:name "Pierre-Antoine Champin" ;""", ""))
-        got = self.g
-        assert isomorphic(got, exp), got.serialize(format="turtle")
-
-    def test_delete_pname_object(self):
-        self.e.add(PA, RDF.type, FOAF.Person)
-        self.e.delete(PA, RDF.type, PN("foaf", "Person"))
-        exp = G(INITIAL)
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_delete_variable_subject(self):
         self.e.bind(V("s"), PA, [InvIRI(FOAF.member)])
-        self.e.delete(V("s"), FOAF.name,
-                      Literal("Université Claude Bernard Lyon 1"))
+        self.e.delete(G([
+            (V("s"), FOAF.name, Literal("Université Claude Bernard Lyon 1")),
+        ]))
         exp = G(INITIAL.replace("""f:name "Université Claude Bernard Lyon 1" ;""", ""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
@@ -328,143 +367,145 @@ class TestPatchEngine(object):
         # so we add an arc and remove it again...
         self.g.add((PA, VOCAB.memberOf, self.ucbl))
         self.e.bind(V("o"), PA, [InvIRI(FOAF.member)])
-        self.e.delete(PA, VOCAB.memberOf, V("o"))
+        self.e.delete(G([
+            (PA, VOCAB.memberOf, V("o")),
+        ]))
         exp = G(INITIAL)
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_item(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("en-US") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("en-US") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr" "en-US" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_first_item(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 1), [ Literal("fr-FR") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 1), [ Literal("fr-FR") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr-FR" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_last_item(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(2, 3), [ Literal("TLH") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(2, 3), [ Literal("TLH") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""", """( "fr" "en" "TLH" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_item_with_several(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("en-US"), Literal("en-GB") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("en-US"), Literal("en-GB") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en-US" "en-GB" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_first_item_with_several(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 1), [ Literal("fr-FR"), Literal("fr-BE") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 1), [ Literal("fr-FR"), Literal("fr-BE") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr-FR" "fr-BE" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_last_item_with_several(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(2, 3), [ Literal("tlh-k1"), Literal("tlh-k2") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(2, 3), [ Literal("tlh-k1"), Literal("tlh-k2") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en" "tlh-k1" "tlh-k2" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_item_with_none(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, 2), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_first_item_with_none(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 1), [])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 1), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_last_item_with_none(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(2, 3), [])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(2, 3), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_insert_begin(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 0), [ Literal("a"), Literal("b") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 0), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "a" "b" "fr" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_insert_middle(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 1), [ Literal("a"), Literal("b") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, 1), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "a" "b" "en" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
-    def test_updatelist_insert_end(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(None, None), [ Literal("a"), Literal("b") ])
+    def test_updatelist_append(self):
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(None, None), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "en" "tlh" "a" "b")"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_begin(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 2), [])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 2), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_middle(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, 2), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_end(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_cut_all(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """()"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_begin(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, 2), [ Literal("a"), Literal("b") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 2), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "a" "b" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_middle(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("a"), Literal("b") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "a" "b" "tlh" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_end(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(1, None), [ Literal("a"), Literal("b") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "fr" "a" "b" )"""))
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_change_all(self):
-        self.e.updatelist(PA, VOCAB.prefLang, Slice(0, None), [ Literal("a"), Literal("b") ])
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [ Literal("a"), Literal("b") ])
         exp = G(INITIAL.replace("""( "fr" "en" "tlh" )""",
                                 """( "a" "b" )"""))
         got = self.g

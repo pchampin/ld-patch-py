@@ -19,13 +19,22 @@
 from __future__ import unicode_literals
 
 from nose.tools import assert_raises, assert_list_equal, eq_
-from rdflib import BNode, Literal, Namespace, URIRef, Variable as V, XSD
+from unittest import skip
+from rdflib import BNode as B, Graph, Literal, Namespace, RDF, URIRef, Variable as V, XSD
+from rdflib.collection import Collection
+from rdflib.compare import isomorphic
 
 from ldpatch.engine import InvIRI, PathConstraint, Slice, UNICITY_CONSTRAINT
 from ldpatch.simple import Parser, ParserError
 
 EX = Namespace("http://ex.co/")
 
+
+def eqg_(got, expected):
+    exp = Graph()
+    for i in expected: exp.add(i)
+    assert isomorphic(got, exp), \
+        "Got graph:\n\n" + got.serialize(format="turtle")
 
 class DummyEngine(object):
     def __init__(self):
@@ -46,14 +55,14 @@ class DummyEngine(object):
     def bind(self, variable, value, path):
         self.operations.append(("bind", variable, value, path))
 
-    def add(self, subject, predicate, object):
-        self.operations.append(("add", subject, predicate, object))
+    def add(self, graph):
+        self.operations.append(("add", graph))
 
-    def delete(self, subject, predicate, object):
-        self.operations.append(("delete", subject, predicate, object))
+    def delete(self, graph):
+        self.operations.append(("delete", graph))
 
-    def updatelist(self, subject, predicate, slice, lst):
-        self.operations.append(("updatelist", subject, predicate, slice, lst))
+    def updatelist(self, graph, subject, predicate, slice, lst):
+        self.operations.append(("updatelist", subject, predicate, slice, lst, graph))
 
 
 class TestStrictParser(object):
@@ -64,8 +73,8 @@ class TestStrictParser(object):
     def test_prefix_in_the_middle(self):
         with assert_raises(ParserError):
             self.p.parseString("""
-            Add <http://example.org/a> <http://example.org/b>
-                <http://example.org/c> .
+            Add  { <http://example.org/a> <http://example.org/b>
+                   <http://example.org/c> } .
             @prefix ex: <http://exammple.org/> .
             """)
 
@@ -124,198 +133,368 @@ class TestSimpleParser(object):
         eq_(("bind", V("Iñtërnâtiônàlizætiøn"), URIRef("http://ex.co/a"), []), self.e.pop())
 
     def test_add_iris(self):
-        self.p.parseString("Add <http://ex.co/a> <http://ex.co/b> "
-                           "<http://ex.co/c> .")
-        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> <http://ex.co/b> "
+                           "<http://ex.co/c> }.")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
 
     def test_add_abbr(self):
-        self.p.parseString("A <http://ex.co/a> <http://ex.co/b> "
-                           "<http://ex.co/c> .")
-        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
+        self.p.parseString("A { <http://ex.co/a> <http://ex.co/b> "
+                           "<http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, EX.c) in graph
 
     def test_add_pnames(self):
-        self.p.parseString("Add ex:a ex:b ex:cde .")
-        eq_(("add", EX.a, EX.b, EX.cde), self.e.pop())
+        self.p.parseString("Add { ex:a ex:b ex:cde } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, EX.cde) in graph
 
-    def test_add_bnodes(self):
-        self.p.parseString("Add _:a ex:b _:cde .")
-        eq_(("add", BNode("a"), EX.b, BNode("cde")), self.e.pop())
+    def test_add_Bs(self):
+        self.p.parseString("Add { _:a ex:b _:cde } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (B("a"), EX.b, B("cde")) in graph
 
-    def test_add_bnodes_brackets(self):
-        self.p.parseString("Add _:a ex:b [] .")
-        tpl = self.e.pop()
-        eq_(("add", BNode("a"), EX.b), tpl[:-1])
-        assert isinstance(tpl[-1], BNode)
+    def test_add_Bs_brackets(self):
+        self.p.parseString("Add { _:a ex:b [] } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        obj = graph.value(B("a"), EX.b)
+        assert type(obj) is B, obj
 
     def test_add_variables(self):
-        self.p.parseString("Add ?a ex:b ?cde .")
-        eq_(("add", V("a"), EX.b, V("cde")), self.e.pop())
+        self.p.parseString("Add { ?a ex:b ?cde } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (V("a"), EX.b, V("cde")) in graph
 
     def test_add_list(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b ( <http://ex.co/c> ex:d ) .")
-        eq_(("add", EX.a, EX.b, [EX.c, EX.d]), self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b "
+                           "      ( <http://ex.co/c> ex:d ) }.")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eqg_(graph, [
+            (EX.a, EX.b, B("l0")),
+            (B("l0"), RDF.first, EX.c),
+            (B("l0"), RDF.rest, B("l1")),
+            (B("l1"), RDF.first, EX.d),
+            (B("l1"), RDF.rest, RDF.nil),
+        ])
 
     def test_add_literal_integer(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b 42 .")
-        eq_(("add", EX.a, EX.b, Literal(42)), self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b 42 } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal(42)) in graph
 
     def test_add_literal_decimal(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b 3.14 .")
-        eq_(("add", EX.a, EX.b, Literal("3.14", datatype=XSD.decimal)),
-            self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b 3.14 } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal("3.14", datatype=XSD.decimal)) in graph
 
     def test_add_literal_double(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b 314e-2 .")
-        eq_(("add", EX.a, EX.b, Literal("314e-2", datatype=XSD.double)),
-            self.e.pop())
-
-    def test_add_literal_integer(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b 42 .")
-        eq_(("add", EX.a, EX.b, Literal(42)), self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b 314e-2 } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal("314e-2", datatype=XSD.double)) in graph
 
     def test_add_literal_string(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b \"hello world\" .")
-        eq_(("add", EX.a, EX.b, Literal("hello world")), self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\" } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal("hello world")) in graph
 
     def test_add_literal_langtag(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b \"hello world\"@en .")
-        eq_(("add", EX.a, EX.b, Literal("hello world", "en")), self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\"@en } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal("hello world", "en")) in graph
 
     def test_add_literal_datatype_iri(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b \"hello world\"^^<http://ex.co/foo> .")
-        eq_(("add", EX.a, EX.b, Literal("hello world", datatype=EX.foo)),
-            self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\"^^<http://ex.co/foo> } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal("hello world", datatype=EX.foo)) in graph
 
     def test_add_literal_datatype_pname(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b \"hello world\"^^ex:foo .")
-        eq_(("add", EX.a, EX.b, Literal("hello world", datatype=EX.foo)),
-            self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\"^^ex:foo } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal("hello world", datatype=EX.foo)) in graph
 
     def test_add_literal_unicode(self):
-        self.p.parseString("Add <http://ex.co/a> ex:b \"Iñtërnâtiônàlizætiøn☃💩\" .")
-        eq_(("add", EX.a, EX.b, Literal("Iñtërnâtiônàlizætiøn☃💩")),
-            self.e.pop())
+        self.p.parseString("Add { <http://ex.co/a> ex:b \"Iñtërnâtiônàlizætiøn☃💩\" } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eq_(len(graph), 1)
+        assert (EX.a, EX.b, Literal("Iñtërnâtiônàlizætiøn☃💩")) in graph
 
-    def test_delete_iris(self):
-        self.p.parseString("Delete <http://ex.co/a> <http://ex.co/b> "
-                           "<http://ex.co/c> .")
-        eq_(("delete", EX.a, EX.b, EX.c), self.e.pop())
+    def test_add_2triples(self):
+        self.p.parseString("Add { ex:a ex:b ex:c . ex:e ex:f ex:g } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (EX.a, EX.b, EX.c),
+            (EX.e, EX.f, EX.g),
+        ])
+
+    def test_add_objectlist_comma(self):
+        self.p.parseString("Add { ex:a ex:b ex:c, ex:d, ex:e } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (EX.a, EX.b, EX.c),
+            (EX.a, EX.b, EX.d),
+            (EX.a, EX.b, EX.e),
+        ])
+
+    def test_add_objectlist_semicolon(self):
+        self.p.parseString("""Add {
+            ex:a
+              ex:b ex:c, ex:d, ex:e ;
+              ex:f ex:g ;
+              ex:h ex:i, ex:j ;
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (EX.a, EX.b, EX.c),
+            (EX.a, EX.b, EX.d),
+            (EX.a, EX.b, EX.e),
+            (EX.a, EX.f, EX.g),
+            (EX.a, EX.h, EX.i),
+            (EX.a, EX.h, EX.j),
+        ])
+
+    def test_add_objectlist_mixed(self):
+        self.p.parseString("""Add {
+            ex:a
+              ex:b "txt", 10, true ;
+              ex:c [], _:bn1 ;
+              ex:d [
+                ex:e ( ex:f _:bn1 ?v )
+              ] ;
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (EX.a,    EX.b,      Literal("txt")),
+            (EX.a,    EX.b,      Literal(10)),
+            (EX.a,    EX.b,      Literal(True)),
+            (EX.a,    EX.c,      B("n0")),
+            (EX.a,    EX.c,      B("n1")),
+            (EX.a,    EX.d,      B("n3")),
+            (B("n3"), EX.e,      B("l1"),),
+            (B("l1"), RDF.first, EX.f),
+            (B("l1"), RDF.rest,  B("l2")),
+            (B("l2"), RDF.first, B("n1")),
+            (B("l2"), RDF.rest,  B("l3")),
+            (B("l3"), RDF.first, V("v")),
+            (B("l3"), RDF.rest,  RDF.nil),
+        ])
+
+    def test_add_empty_list(self):
+        self.p.parseString("""Add {
+            ex:a ex:b ()
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (EX.a, EX.b, RDF.nil),
+        ])
+
+    def test_add_empty_bnode(self):
+        self.p.parseString("""Add {
+            ex:a ex:b []
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (EX.a, EX.b, B()),
+        ])
+
+    def test_add_subject_list(self):
+        self.p.parseString("""Add {
+            ( ex:a ex:b ) ex:c ex:d
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (B("l1"), RDF.first, EX.a),
+            (B("l1"), RDF.rest,  B("l2")),
+            (B("l2"), RDF.first, EX.b),
+            (B("l2"), RDF.rest,  RDF.nil),
+            (B("l1"), EX.c,      EX.d),
+        ])
+
+    def test_add_subject_bnode(self):
+        self.p.parseString("""Add {
+            [ ex:a ex:b ] ex:c ex:d
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (B("b1"), EX.a, EX.b),
+            (B("b1"), EX.c, EX.d),
+        ])
+
+    def test_add_standalone_bnode(self):
+        self.p.parseString("""Add {
+            [ ex:a ex:b ]
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (B("b1"), EX.a, EX.b),
+        ])
+
+    def test_add_standalone_list(self):
+        self.p.parseString("""Add {
+            ( ex:a <http://ex.co/b> )
+        } .""")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [
+            (B("l1"), RDF.first, EX.a),
+            (B("l1"), RDF.rest,  B("l2")),
+            (B("l2"), RDF.first, EX.b),
+            (B("l2"), RDF.rest,  RDF.nil),
+        ])
+
+    def test_add_keyword_a(self):
+        self.p.parseString("Add { ex:a a ex:A } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "add")
+        eqg_(graph, [(EX.a, RDF.type, EX.A)])
+
+    def test_delete(self):
+        self.p.parseString("Delete { <http://ex.co/a> <http://ex.co/b> "
+                           "         <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "delete")
+        eq_(len(graph), 1)
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
 
     def test_delete_abbr(self):
-        self.p.parseString("D <http://ex.co/a> <http://ex.co/b> "
-                           "<http://ex.co/c> .")
-        eq_(("delete", EX.a, EX.b, EX.c), self.e.pop())
+        self.p.parseString("D { <http://ex.co/a> <http://ex.co/b> "
+                           "    <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "delete")
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
 
-    def test_delete_pnames(self):
-        self.p.parseString("Delete ex:a ex:b ex:cde .")
-        eq_(("delete", EX.a, EX.b, EX.cde), self.e.pop())
-
-    def test_delete_bnodes(self):
-        self.p.parseString("Delete _:a ex:b _:cde .")
-        eq_(("delete", BNode("a"), EX.b, BNode("cde")), self.e.pop())
-
-    def test_delete_bnodes_brackets(self):
-        self.p.parseString("Delete _:a ex:b [   ] .")
-        tpl = self.e.pop()
-        eq_(("delete", BNode("a"), EX.b), tpl[:-1])
-        assert isinstance(tpl[-1], BNode)
-
-    def test_delete_variables(self):
-        self.p.parseString("Delete ?a ex:b ?cde .")
-        eq_(("delete", V("a"), EX.b, V("cde")), self.e.pop())
-
-    def test_delete_literal_integer(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b 42 .")
-        eq_(("delete", EX.a, EX.b, Literal(42)), self.e.pop())
-
-    def test_delete_literal_decimal(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b 3.14 .")
-        eq_(("delete", EX.a, EX.b, Literal("3.14", datatype=XSD.decimal)),
-            self.e.pop())
-
-    def test_delete_literal_double(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b 314e-2 .")
-        eq_(("delete", EX.a, EX.b, Literal("314e-2", datatype=XSD.double)),
-            self.e.pop())
-
-    def test_delete_literal_integer(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b 42 .")
-        eq_(("delete", EX.a, EX.b, Literal(42)), self.e.pop())
-
-    def test_delete_literal_string(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b \"hello world\" .")
-        eq_(("delete", EX.a, EX.b, Literal("hello world")), self.e.pop())
-
-    def test_delete_literal_langtag(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b \"hello world\"@en .")
-        eq_(("delete", EX.a, EX.b, Literal("hello world", "en")), self.e.pop())
-
-    def test_delete_literal_datatype_iri(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b \"hello world\"^^<http://ex.co/foo> .")
-        eq_(("delete", EX.a, EX.b, Literal("hello world", datatype=EX.foo)),
-            self.e.pop())
-
-    def test_delete_literal_datatype_pname(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b \"hello world\"^^ex:foo .")
-        eq_(("delete", EX.a, EX.b, Literal("hello world", datatype=EX.foo)),
-            self.e.pop())
-
-    def test_delete_literal_unicode(self):
-        self.p.parseString("Delete <http://ex.co/a> ex:b \"Iñtërnâtiônàlizætiøn☃💩\" .")
-        eq_(("delete", EX.a, EX.b, Literal("Iñtërnâtiônàlizætiøn☃💩")),
-            self.e.pop())
+    # assuming that parsing the 'Delete' graph is the same as
+    # parsing the 'Add' the graph, we do not duplicate all the tests
 
     def test_updatelist_point(self):
         self.p.parseString("UpdateList ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3, 4),
-             [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
-            self.e.pop())
+        got = self.e.pop() ; graph = got[-1]
+        eq_(len(got), 6)
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 4)), got[:4])
+        eq_([ EX.a, EX.b, Literal("foo"), Literal(42) ],
+            list(Collection(graph, got[-2])))
 
     def test_updatelist_abbr(self):
         self.p.parseString("UL ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3, 4),
-             [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
-            self.e.pop())
+        got = self.e.pop() ; graph = got[-1]
+        eq_(len(got), 6)
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 4)), got[:4])
+        eq_([ EX.a, EX.b, Literal("foo"), Literal(42) ],
+            list(Collection(graph, got[-2])))
 
     def test_updatelist_til_the_end(self):
         self.p.parseString("UpdateList ?x ex:p 3.. ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3, None),
-             [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
-            self.e.pop())
+        got = self.e.pop() ; graph = got[-1]
+        eq_(len(got), 6)
+        eq_(("updatelist", V("x"), EX.p, Slice(3, None)), got[:4])
+        eq_([ EX.a, EX.b, Literal("foo"), Literal(42) ],
+            list(Collection(graph, got[-2])))
 
     def test_updatelist_slice(self):
         self.p.parseString("UpdateList ?x ex:p 3..7 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3, 7),
-             [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
-            self.e.pop())
+        got = self.e.pop() ; graph = got[-1]
+        eq_(len(got), 6)
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 7)), got[:4])
+        eq_([ EX.a, EX.b, Literal("foo"), Literal(42) ],
+            list(Collection(graph, got[-2])))
 
     def test_updatelist_at_the_end(self):
         self.p.parseString("UpdateList ?x ex:p .. ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
-        eq_(("updatelist", V("x"), EX.p, Slice(None, None),
-             [ EX.a, EX.b, Literal("foo"), Literal(42) ]),
-            self.e.pop())
+        got = self.e.pop() ; graph = got[-1]
+        eq_(len(got), 6)
+        eq_(("updatelist", V("x"), EX.p, Slice(None, None)), got[:4])
+        eq_([ EX.a, EX.b, Literal("foo"), Literal(42) ],
+            list(Collection(graph, got[-2])))
 
     def test_updatelist_empty(self):
         self.p.parseString("UpdateList ?x ex:p 3 () .")
-        eq_(("updatelist", V("x"), EX.p, Slice(3, 4), []),
-            self.e.pop())
-
+        got = self.e.pop() ; graph = got[-1]
+        eq_(len(got), 6)
+        eq_(("updatelist", V("x"), EX.p, Slice(3, 4)), got[:4])
+        eq_([], list(Collection(graph, got[-2])))
 
     def test_add_multiline(self):
-        self.p.parseString("Add\n"
+        self.p.parseString("Add {\n"
                            "  <http://ex.co/a>\n"
                            "    <http://ex.co/b>\n"
-                           "      <http://ex.co/c> .")
-        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
+                           "      <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
 
     def test_comment(self):
         self.p.parseString("# hello world\n")
         self.e.is_empty()
 
     def test_comment_in_the_middle(self):
-        self.p.parseString("Add\n"
+        self.p.parseString("Add {\n"
                            "  <http://ex.co/a>\n"
                            "  # hello world\n"
                            "    <http://ex.co/b>\n"
-                           "      <http://ex.co/c> .")
-        eq_(("add", EX.a, EX.b, EX.c), self.e.pop())
+                           "      <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
+
+    def test_add_clears_graph(self):
+        self.p.parseString("""
+            Add { ex:a ex:b ex:c }.
+            Add { ex:d ex:e ex:f }.
+        """)
+        # check that the second graph is not poluted by the first one
+        _, graph = self.e.pop()
+        eqg_(graph, [(EX.d, EX.e, EX.f)])
+
+    def test_del_clears_graph(self):
+        self.p.parseString("""
+            Delete { ex:a ex:b ex:c }.
+            Add { ex:d ex:e ex:f }.
+        """)
+        # check that the second graph is not poluted by the first one
+        _, graph = self.e.pop()
+        eqg_(graph, [(EX.d, EX.e, EX.f)])
+
+    def test_updatelist_clears_graph(self):
+        self.p.parseString("""
+            UpdateList ex:a ex:b 1..2 ( ex:a ex:b ex:c ).
+            Add { ex:d ex:e ex:f }.
+        """)
+        # check that the second graph is not poluted by the first one
+        _, graph = self.e.pop()
+        eqg_(graph, [(EX.d, EX.e, EX.f)])
+

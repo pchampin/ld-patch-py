@@ -19,32 +19,13 @@
 
 """
 I implement an engine executing an LD-Patch.
-
-Design note
------------
-
-This implementation is not limited to the abstract syntax of LD-Patch,
-it extends it with a Prefix command (for binding a prefix to a namespace)
-and supports PrefixedNames wherever IRIs are expected.
-
-While this could be handled by concrete syntax parsers,
-(and may be should for the sake of purity),
-it seems like a better idea to factorize it here,
-as all concrete syntax will probably have to rely on such a mechanism.
-
-TODO: another approach would be to expect parsers to use expand_pname,
-and to only provide IRIs. Might be cleaner?
 """
 
 from collections import namedtuple
 
 from rdflib import BNode, Literal, RDF, URIRef as IRI, Variable
+from rdflib.exceptions import UniquenessError
 
-
-_PrefixedNameBase = namedtuple("PrefixedName", ["prefix", "suffix"])
-class PrefixedName (_PrefixedNameBase):
-    def __new__(cls, prefix, suffix=""):
-        return _PrefixedNameBase.__new__(cls, prefix, suffix)
 
 InvIRI = namedtuple("InvIRI", ["iri"])
 
@@ -65,6 +46,22 @@ class _UnicityConstraintSingleton(object):
         return "UNICITY_CONSTRAINT"
 UNICITY_CONSTRAINT = _UnicityConstraintSingleton()
 
+
+def _get_last_node(graph, lst):
+    """
+    Find the last node of a non-empty list
+    """
+    assert lst != RDF.nil
+    last = lst
+    graph_value = graph.value
+    while True:
+        nxt = graph_value(last, RDF.rest, any=False)
+        if nxt is None:
+            raise MalformedListException()
+        if nxt == RDF.nil:
+            break
+        last = nxt
+    return last
 
 
 class PatchEngine(object):
@@ -99,9 +96,7 @@ class PatchEngine(object):
         Convert variables and bnodes, and return anything else unchanged.
         """
         typelt = type(element)
-        if typelt is PrefixedName:
-            return self.expand_pname(*element)
-        elif typelt is Variable:
+        if typelt is Variable:
             ret = self._variables.get(element)
             if ret is not None:
                 return ret
@@ -117,9 +112,6 @@ class PatchEngine(object):
 
     def do_path_step(self, nodeset, pathelt):
         typelt = type(pathelt)
-        if typelt is PrefixedName:
-            pathelt = self.expand_pname(*pathelt)
-            typelt = IRI
         if typelt is IRI:
             return {
                 trpl[2]
@@ -147,7 +139,6 @@ class PatchEngine(object):
         else:
             raise TypeError("Unrecognized path element {!r}".format(pathelt))
 
-
     def test_path_constraint(self, node, constraint):
         nodeset = {node}
         try:
@@ -169,16 +160,34 @@ class PatchEngine(object):
                 value = self.get_bnode(value)
             return (value in nodeset)
 
-    def _generate_list(self, lst, nil=RDF.nil):
-        graph_add = self._graph.add
-        curnode= nil
-        reversed_items = [ self.get_node(i) for i in reversed(lst) ]
-        for i in reversed_items:
-            oldnode = curnode
-            curnode= BNode()
-            graph_add((curnode, RDF.rest, oldnode))
-            graph_add((curnode, RDF.first, i))
-        return curnode
+    def updatelist_empty(self, udl_graph, subject, predicate, slice, udl_head):
+        if udl_head == RDF.nil:
+            return # replace empty list by empty list == noop
+        idx1, idx2 = slice.idx1, slice.idx2
+        if idx1 is not None and idx1 > 0:
+            raise OutOfBoundUpdateListException()
+        if idx2 is not None and idx2 > 0:
+            raise OutOfBoundUpdateListException()
+        if udl_head != RDF.nil:
+            self.add(udl_graph)
+            new_lst = self.get_node(udl_head)
+            self._graph.remove(subject, predicate, RDF.nil)
+            self._graph.add(subject, predicate, new_lst)
+
+    def replace_listnode(self, old_node, new_node):
+        graph = self._graph
+        graph_add = graph.add
+        graph_rem = graph.remove
+        for _, p, o in graph.triples((old_node, None, None)):
+            # we do not change RDF.first and RDF.rest,
+            # because old_node might still be part of the updated list
+            # (when *inserting* elements in a list)
+            if p != RDF.first and p != RDF.rest:
+                graph_rem((old_node, p, o))
+                graph_add((new_node, p, o))
+        for s, p, _ in graph.triples((None, None, old_node)):
+            graph_rem((s, p, old_node))
+            graph_add((s, p, new_node))
 
 
     # ldpatch commands
@@ -197,72 +206,98 @@ class PatchEngine(object):
             raise NoUniqueMatch(nodeset)
         self._variables[variable] =  iter(nodeset).next()
 
-    def add(self, subject, predicate, object):
-        subject = self.get_node(subject)
-        predicate = self.get_node(predicate)
-        if type(object) is list:
-            object = self._generate_list(object)
-        else:
-            object = self.get_node(object)
-        self._graph.add((subject, predicate, object))
+    def add(self, add_graph):
+        get_node = self.get_node
+        graph_add = self._graph.add
+        for subject, predicate, object in add_graph:
+            subject = get_node(subject)
+            predicate = get_node(predicate)
+            object = get_node(object)
+            graph_add((subject, predicate, object))
 
-    def delete(self, subject, predicate, object):
-        subject = self.get_node(subject)
-        predicate = self.get_node(predicate)
-        object= self.get_node(object)
-        self._graph.remove((subject, predicate, object))
+    def delete(self, del_graph):
+        get_node = self.get_node
+        graph_rem = self._graph.remove
+        for subject, predicate, object in del_graph:
+            subject = get_node(subject)
+            predicate = get_node(predicate)
+            object= get_node(object)
+            graph_rem((subject, predicate, object))
 
-    def updatelist(self, subject, predicate, slice, lst):
-        graph_value = self._graph.value
-        subject = self.get_node(subject)
-        predicate = self.get_node(predicate)
+    def updatelist(self, udl_graph, subject, predicate, slice, udl_head):
+        try:
+            graph_value = self._graph.value
+            subject = self.get_node(subject)
+            predicate = self.get_node(predicate)
+            try:
+                old_lst = graph_value(subject, predicate, any=True)
+            except UniquenessError, ex:
+                raise
+            if old_lst is None:
+                raise NoSuchListException()
 
-        current = graph_value(subject, predicate)
-        if current is None:
-            raise NoSuchListException()
+            if old_lst == RDF.nil:
+                self.updatelist_empty(self, udl_graph, subject, predicate, slice, udl_head)
+                return
 
-        idx1, idx2 = slice.idx1, slice.idx2
+            idx1, idx2 = slice.idx1, slice.idx2
 
-        # look for the left "anchor" for the new list
-        left_anchor = subject
-        i = 0
-        if idx1 is not None:
-            while i < idx1:
-                left_anchor = current
-                current = graph_value(current, RDF.rest)
-                if current is None:
-                    raise MalformedListException()
-                if current == RDF.nil:
-                    raise OutOfBoundUpdateListException()
-                i += 1
-        else:
-            while current != RDF.nil:
-                left_anchor = current
-                current = graph_value(current, RDF.rest)
-                if current is None:
-                    raise MalformedListException()
+            # look for the left "anchor" for the new list
+            left_anchor = None
+            right_anchor = None
+            pred = None
+            to_clean = []
+            if idx1 is None:
+                assert idx2 is None # should be controlled by the parser
+                left_anchor = RDF.nil
+            else:
+                left_anchor = old_lst
+                i = 0
+                while idx1 is None or i < idx1:
+                    if left_anchor == RDF.nil:
+                        raise OutOfBoundUpdateListException()
+                    pred = left_anchor
+                    left_anchor = graph_value(left_anchor, RDF.rest, any=False)
+                    if left_anchor is None:
+                        raise MalformedListException()
+                    i += 1
+                if left_anchor == RDF.nil:
+                    if idx2 is not None and idx2 > idx1:
+                        raise OutOfBoundUpdateListException()
 
-        # look for the right "anchor" for the new list,
-        # and mark all intermediate nodes for cleaning
-        # NB: idx2 can be None, meaning "until the end"
-        clean_list = []
-        while (i < idx2 or idx2 is None) and current != RDF.nil:
-            clean_list.append(current)
-            current = graph_value(current, RDF.rest)
-            if current is None:
-                raise MalformedListException()
-            i += 1
-        right_anchor = current
+                # look for the right "anchor" for the new list,
+                # and mark all intermediate nodes for cleaning
+                # NB: idx2 can be None, meaning "until the end"
+                right_anchor = left_anchor
+                while (i < idx2 or idx2 is None) and right_anchor != RDF.nil:
+                    to_clean.append(right_anchor)
+                    right_anchor = graph_value(right_anchor, RDF.rest, any=False)
+                    if right_anchor is None:
+                        raise MalformedListException()
+                    i += 1
+            assert left_anchor is not None
 
-        # replace old list by new list
-        new_list = self._generate_list(lst, right_anchor)
-        if left_anchor is not subject:
-            predicate = RDF.rest
-        self._graph.set((left_anchor, predicate, new_list))
-        graph_remove = self._graph.remove
-        for i in clean_list:
-            graph_remove((i, None, None))
+            # add new list in the graph and link it adequately
+            assert udl_head != RDF.nil or len(udl_graph) == 0
+            self.add(udl_graph)
+            new_lst = self.get_node(udl_head)
+            if left_anchor == RDF.nil:
+                last_old = pred or _get_last_node(self._graph, old_lst)
+                self._graph.set((last_old, RDF.rest, new_lst))
+                assert len(to_clean) == 0
+            else:
+                if new_lst != RDF.nil:
+                    self.replace_listnode(left_anchor, new_lst)
+                    last_new = _get_last_node(self._graph, new_lst)
+                    self._graph.set((last_new, RDF.rest, right_anchor))
+                elif left_anchor != right_anchor:
+                    self.replace_listnode(left_anchor, right_anchor)
+                graph_remove = self._graph.remove
+                for i in to_clean:
+                    graph_remove((i, None, None))
 
+        except UniquenessError, ex:
+            raise MalformedListException(ex.msg)
 
 
 
