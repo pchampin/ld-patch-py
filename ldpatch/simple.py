@@ -171,6 +171,7 @@ class Parser(object):
         BNode = BLANK_NODE_LABEL | ANON
 
         # BEGIN imported from http://www.w3.org/TR/sparql11-query/#grammar
+        # BEGIN imported from http://www.w3.org/TR/sparql11-query/#grammar
         # and adapted to some point
         # TODO re-order that
         Verb = VARIABLE | Iri | Keyword('a')
@@ -213,7 +214,7 @@ class Parser(object):
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Path + PERIOD
         Add = ADD_CMD + Suppress("{") + Optional(TriplesTemplate) + Suppress("}") + PERIOD
-        Delete = DELETE_CMD + Suppress("{") + Optional(TriplesTemplate) + Suppress("}") + PERIOD
+        Delete = DELETE_CMD + Subject + Predicate + Object + PERIOD
         UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + List + PERIOD
 
         Statement = Prefix | Bind | Add | Delete | UpdateList
@@ -312,9 +313,10 @@ class Parser(object):
 
     def _do_delete(self, s, loc, toks):
         self.in_prologue = False
-        assert not toks, toks
+        assert len(toks) == 3, toks
         graph = rdflib.Graph()
-        self.engine.delete(self.get_current_graph(clear=True))
+        graph.add(tuple(toks))
+        self.engine.delete(graph)
 
     def _do_updatelist(self, s, loc, toks):
         self.in_prologue = False

@@ -384,16 +384,16 @@ class TestSimpleParser(object):
         eqg_(graph, [(EX.a, RDF.type, EX.A)])
 
     def test_delete(self):
-        self.p.parseString("Delete { <http://ex.co/a> <http://ex.co/b> "
-                           "         <http://ex.co/c> } .")
+        self.p.parseString("Delete <http://ex.co/a> <http://ex.co/b> "
+                           "       <http://ex.co/c> .")
         cmd, graph = self.e.pop()
         eq_(cmd, "delete")
         eq_(len(graph), 1)
         eqg_(graph, [(EX.a, EX.b, EX.c)])
 
     def test_delete_abbr(self):
-        self.p.parseString("D { <http://ex.co/a> <http://ex.co/b> "
-                           "    <http://ex.co/c> } .")
+        self.p.parseString("D <http://ex.co/a> <http://ex.co/b> "
+                           "  <http://ex.co/c> .")
         cmd, graph = self.e.pop()
         eq_(cmd, "delete")
         eqg_(graph, [(EX.a, EX.b, EX.c)])
@@ -482,7 +482,7 @@ class TestSimpleParser(object):
 
     def test_del_clears_graph(self):
         self.p.parseString("""
-            Delete { ex:a ex:b ex:c }.
+            Delete ex:a ex:b ex:c.
             Add { ex:d ex:e ex:f }.
         """)
         # check that the second graph is not poluted by the first one
