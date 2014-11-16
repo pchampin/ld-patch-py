@@ -32,10 +32,14 @@ EX = Namespace("http://ex.co/")
 
 def eqg_(got, expected):
     exp = Graph()
-    for i in expected: exp.add(i)
+    for i in expected:
+        exp.add(i)
     assert isomorphic(got, exp), \
         "Got graph:\n\n" + got.serialize(format="turtle")
-
+    
+def _s(graph):
+    return graph.serialize(format="n3")
+    
 class DummyEngine(object):
     def __init__(self):
         self.operations = []
@@ -145,21 +149,21 @@ class TestSimpleParser(object):
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, EX.c) in graph
+        assert (EX.a, EX.b, EX.c) in graph, _s(graph)
 
     def test_add_pnames(self):
         self.p.parseString("Add { ex:a ex:b ex:cde } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, EX.cde) in graph
+        assert (EX.a, EX.b, EX.cde) in graph, _s(graph)
 
     def test_add_Bs(self):
         self.p.parseString("Add { _:a ex:b _:cde } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (B("a"), EX.b, B("cde")) in graph
+        assert (B("a"), EX.b, B("cde")) in graph, _s(graph)
 
     def test_add_Bs_brackets(self):
         self.p.parseString("Add { _:a ex:b [] } .")
@@ -174,7 +178,7 @@ class TestSimpleParser(object):
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (V("a"), EX.b, V("cde")) in graph
+        assert (V("a"), EX.b, V("cde")) in graph, _s(graph)
 
     def test_add_list(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b "
@@ -194,56 +198,56 @@ class TestSimpleParser(object):
         cmd, graph = self.e.pop()
         eq_(cmd, "add")
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal(42)) in graph
+        assert (EX.a, EX.b, Literal(42)) in graph, _s(graph)
 
     def test_add_literal_decimal(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b 3.14 } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal("3.14", datatype=XSD.decimal)) in graph
+        assert (EX.a, EX.b, Literal("3.14", datatype=XSD.decimal)) in graph, _s(graph)
 
     def test_add_literal_double(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b 314e-2 } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal("314e-2", datatype=XSD.double)) in graph
+        assert (EX.a, EX.b, Literal("314e-2", datatype=XSD.double)) in graph, _s(graph)
 
     def test_add_literal_string(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\" } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal("hello world")) in graph
+        assert (EX.a, EX.b, Literal("hello world")) in graph, _s(graph)
 
     def test_add_literal_langtag(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\"@en } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal("hello world", "en")) in graph
+        assert (EX.a, EX.b, Literal("hello world", "en")) in graph, _s(graph)
 
     def test_add_literal_datatype_iri(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\"^^<http://ex.co/foo> } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal("hello world", datatype=EX.foo)) in graph
+        assert (EX.a, EX.b, Literal("hello world", datatype=EX.foo)) in graph, _s(graph)
 
     def test_add_literal_datatype_pname(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b \"hello world\"^^ex:foo } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal("hello world", datatype=EX.foo)) in graph
+        assert (EX.a, EX.b, Literal("hello world", datatype=EX.foo)) in graph, _s(graph)
 
     def test_add_literal_unicode(self):
         self.p.parseString("Add { <http://ex.co/a> ex:b \"Iñtërnâtiônàlizætiøn☃💩\" } .")
         cmd, graph = self.e.pop()
         eq_("add", cmd)
         eq_(len(graph), 1)
-        assert (EX.a, EX.b, Literal("Iñtërnâtiônàlizætiøn☃💩")) in graph
+        assert (EX.a, EX.b, Literal("Iñtërnâtiônàlizætiøn☃💩")) in graph, _s(graph)
 
     def test_add_2triples(self):
         self.p.parseString("Add { ex:a ex:b ex:c . ex:e ex:f ex:g } .")
@@ -364,6 +368,7 @@ class TestSimpleParser(object):
             (B("b1"), EX.a, EX.b),
         ])
 
+    @skip("Apparently not supported by Turtle")
     def test_add_standalone_list(self):
         self.p.parseString("""Add {
             ( ex:a <http://ex.co/b> )

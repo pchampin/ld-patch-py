@@ -37,13 +37,13 @@ To prevent re-generating the grammar for each new ldpatch,
 Parser has a ``reset`` method that allows to restart it afresh.
 
 """
-from pyparsing import And, Combine, Forward, Group, Keyword, Literal, OneOrMore, Optional, ParseException, quotedString, Regex, restOfLine, Suppress, ZeroOrMore
+from pyparsing import Combine, Forward, Group, Keyword, Literal, OneOrMore, Optional, ParseException, Regex, restOfLine, Suppress, ZeroOrMore
+from re import compile as regex, VERBOSE
 
 import rdflib
 from rdflib.collection import Collection as RdfCollection
 
 import engine
-from rdflib.term import BNode
 
 RDF_NIL = rdflib.RDF.nil
 
@@ -78,28 +78,35 @@ BLANK_NODE_LABEL = Combine(
     + ZeroOrMore(OneOrMore('.') + OneOrMore(PN_CHARS))
 )
 
-PNAME_NS = Optional(PN_PREFIX, "") + Suppress(':')
+PNAME_NS = Combine(Optional(PN_PREFIX, "") + Suppress(':'))
 PNAME_LN = Combine(PNAME_NS + PN_LOCAL)
-IRIREF = Regex(r'<([^\x00-\x20<>"{}|^`\\]|\u[0-9a-fA-F]{4}|\U[0-9a-fA-F]{8})*>')
-STRING = quotedString # TODO implement real Turtle syntax?
+IRIREF = Regex(r'<([^\x00-\x20<>"{}|^`\\]|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8})*>')
+ECHAR =  Regex(r'''\\[tbnrf"'\\]''')
+UCHAR = Regex(r'\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}')
+STRING_LITERAL_QUOTE = Combine(Suppress('"') + ZeroOrMore(Regex(r'[^\x22\x5C\x0A\x0D]') | ECHAR | UCHAR) + Suppress('"'))
+STRING_LITERAL_SINGLE_QUOTE = Combine(Suppress("'") + ZeroOrMore(Regex(r'[^\x27\x5C\x0A\x0D]') | ECHAR | UCHAR) + Suppress("'"))
+STRING_LITERAL_LONG_SINGLE_QUOTE = Combine(Suppress("'''") + ZeroOrMore(Regex(r"'{0,2}") + (Regex(r"[^'\\]") | ECHAR | UCHAR)) + Suppress("'''"))
+STRING_LITERAL_LONG_QUOTE = Combine(Suppress('"""') + ZeroOrMore(Regex(r'"{0,2}') + (Regex(r'[^"\\]') | ECHAR | UCHAR)) + Suppress('"""'))
+STRING = STRING_LITERAL_LONG_SINGLE_QUOTE | STRING_LITERAL_LONG_QUOTE | STRING_LITERAL_QUOTE | STRING_LITERAL_SINGLE_QUOTE
 LANGTAG = Suppress('@') + Regex(r'[a-zA-Z]+(-[a-zA-Z0-9]+)*')
 INTEGER = Regex(r'[+-]?[0-9]+')
-DECIMAL = Regex(r'[+-]?[0-9]*\.[0-9]*')
+DECIMAL = Regex(r'[+-]?[0-9]*\.[0-9]+')
 EXPONENT = Regex(r'[eE][+-]?[0-9]+')
-DOUBLE = Regex(r'[+-]?[0-9]+\.[0-9]*|[+-]?\.?[0-9]+|[+-]?\.?[0-9]+') + EXPONENT
+DOUBLE = Combine(Regex(r'[+-]?[0-9]+\.[0-9]*|[+-]?\.?[0-9]+|[+-]?\.?[0-9]+') + EXPONENT)
 NUMERIC_LITERAL = DOUBLE | DECIMAL | INTEGER
 BOOLEAN_LITERAL = Regex(r'true|false')
 ANON = Literal("[") + Literal("]")
-NIL = Literal("(") + Literal(")")
 
 # other context-independant rules
 VARIABLE = Combine(
     Regex(r'[?$]') + ( PN_CHARS_U | Regex(r'[0-9]') )
-    +  ZeroOrMore(PN_CHARS_U | Regex('[0-9\u00B7\u0300-\u036F\u203F-\u2040]'))
+    +  ZeroOrMore(PN_CHARS_U | Regex(u'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u2040]'))
 )
 INDEX = Regex(r'[0-9]+')
 UNICITY_CONSTRAINT = Literal('!')
-SLICE = ( INDEX + Optional('..' + Optional(INDEX) ) ) | '..'
+SLICE = INDEX + Optional('..' + Optional(INDEX) ) | '..'
+COMMA = Suppress(",")
+SEMICOLON = Suppress(";")
 PERIOD = Suppress(".")
 BIND_CMD = Suppress(Literal("Bind") | Literal("B"))
 ADD_CMD = Suppress(Literal("Add") | Literal("A"))
@@ -154,9 +161,33 @@ def parse_slice(s, loc, toks):
     else:                 # <index> ".." <index>
         return engine.Slice(toks[0], toks[2])
 
-@NIL.setParseAction
-def parse_nil(s, loc, toks):
-    return RDF_NIL
+
+# unescaping
+IRI_ESCAPE_SEQ = regex(ur"\\u([0-9A-Fa-f]{4}) | \\U([0-9A-Fa-f]{8})", VERBOSE)
+LOCAL_ESCAPE_SEQ = regex(ur"\\([_~.\-!$&'()*+,;=/?#@%])", VERBOSE)
+STRING_ESCAPE_SEQ = regex(ur"\\u([0-9A-Fa-f]{4}) | \\U([0-9A-Fa-f]{8}) "
+                          ur" | \\([tbnrf\\\"'])", VERBOSE)
+STRING_UNESCAPE_MAP = { "t": "\t", "b": "\b", "n": "\n", "r": "\r", "f": "\f",
+                        "\\": "\\", '"': '"', "'": "'" }
+
+def unescape_iri(iri):
+    def repl(match):
+        groups = match.groups()
+        return unichr(int(groups[0] or groups[1], 16))
+    return IRI_ESCAPE_SEQ.sub(repl, iri)
+
+def unescape_local_name(local):
+    return LOCAL_ESCAPE_SEQ.sub(r"\1", local)
+
+def unescape_string(string):
+    def repl(match):
+        groups = match.groups()
+        if groups[2]:
+            return STRING_UNESCAPE_MAP[groups[2]]
+        else:
+            return unichr(int(groups[0] or groups[1], 16))
+    return STRING_ESCAPE_SEQ.sub(repl, string)
+
 
 
 class Parser(object):
@@ -165,41 +196,30 @@ class Parser(object):
         self.reset(engine, baseiri, strict)
         PrefixedName = PNAME_LN | PNAME_NS
         Iri = IRIREF | PrefixedName
-        RDFLiteral = STRING \
-            + Optional(LANGTAG("langtag") | Group(Suppress('^^') + Iri)("datatype"))
-        PatchLiteral = RDFLiteral | NUMERIC_LITERAL | BOOLEAN_LITERAL
         BNode = BLANK_NODE_LABEL | ANON
 
-        # BEGIN imported from http://www.w3.org/TR/sparql11-query/#grammar
-        # BEGIN imported from http://www.w3.org/TR/sparql11-query/#grammar
-        # and adapted to some point
-        # TODO re-order that
-        Verb = VARIABLE | Iri | Keyword('a')
-        GraphTerm = Iri | PatchLiteral | BNode | NIL
-        VarOrTerm = VARIABLE | GraphTerm
-        GraphNode = Forward()
-        Collection = Group(Suppress('(') + OneOrMore(GraphNode) + Suppress(')'))
-        BlankNodePropertyList = Forward()
-        TriplesNode = Collection | BlankNodePropertyList
-        GraphNode << (VarOrTerm | TriplesNode)
-        Object = GraphNode
-        ObjectList = Object + ZeroOrMore(Suppress(',') + Object)
-        PropertyListNotEmpty = Verb + Group(ObjectList) + \
-                               ZeroOrMore(Suppress(';') + Optional(Verb + Group(ObjectList)))
-        BlankNodePropertyList << Suppress('[') + PropertyListNotEmpty + \
-                                Suppress(']')
-        PropertyList = Optional(PropertyListNotEmpty)
-        TriplesSameSubject = (VarOrTerm + PropertyListNotEmpty) \
-                             | ( TriplesNode +  PropertyList )
-        TriplesTemplate = Forward()
-        TriplesTemplate << TriplesSameSubject +\
-                           Optional(PERIOD + Optional(TriplesTemplate))
-        # END imported
 
-        Subject = Iri | BNode | VARIABLE
+        RDFLiteral = STRING \
+            + Optional(LANGTAG("langtag") | Group(Suppress('^^') + Iri)("datatype"))
+        Object = Forward()
+        Collection = Suppress('(') + ZeroOrMore(Object) + Suppress(')')
+        PredicateObjectList = Forward()
+        BlankNodePropertyList = Suppress('[') + PredicateObjectList + \
+                                Suppress(']')
+        TtlLiteral = RDFLiteral | NUMERIC_LITERAL | BOOLEAN_LITERAL
+        Subject = Iri | BNode | Collection \
+                  | VARIABLE # added for LD Patch
         Predicate = Iri
-        Value = Iri | PatchLiteral | VARIABLE
-        List = Collection | NIL
+        Object << (Iri | BNode | Collection | BlankNodePropertyList | TtlLiteral \
+                   | VARIABLE) # added for LD Patch
+        Verb = Predicate | Keyword('a')
+        ObjectList = Group(Object + ZeroOrMore(COMMA + Object))
+        PredicateObjectList << (
+            Verb + ObjectList + ZeroOrMore(SEMICOLON +  Optional(Verb + ObjectList)))
+        Triples = (Subject + PredicateObjectList) \
+                | (BlankNodePropertyList + Optional(PredicateObjectList))
+
+        Value = Iri | TtlLiteral | VARIABLE
 
         InvPredicate = Suppress('^') + Predicate
         Step = Suppress('/') + (Predicate | InvPredicate | INDEX)
@@ -211,17 +231,21 @@ class Parser(object):
             + Optional( Suppress('=') + Object )("value")
             + Suppress(']'))
 
+        Graph = Suppress("{") + Optional(Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD)) + Suppress("}")
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Path + PERIOD
-        Add = ADD_CMD + Suppress("{") + Optional(TriplesTemplate) + Suppress("}") + PERIOD
+        Add = ADD_CMD + Graph + PERIOD
         Delete = DELETE_CMD + Subject + Predicate + Object + PERIOD
-        UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + List + PERIOD
+        UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + Collection \
+                   + PERIOD
 
         Statement = Prefix | Bind | Add | Delete | UpdateList
         Patch = ZeroOrMore(Statement)
         Patch.ignore('#' + restOfLine) # Comment
+        Patch.parseWithTabs()
 
         self.grammar = Patch
+
 
         IRIREF.setParseAction(self._parse_iri)
         PrefixedName.setParseAction(self._parse_pname)
@@ -240,7 +264,7 @@ class Parser(object):
         Collection.setParseAction(self._parse_collection)
         ObjectList.setParseAction(self._parse_as_list)
         BlankNodePropertyList.setParseAction(self._parse_bnpl)
-        TriplesSameSubject.setParseAction(self._parse_tss)
+        Triples.setParseAction(self._parse_tss)
 
 
     def reset(self, engine, baseiri, strict=False):
@@ -259,10 +283,12 @@ class Parser(object):
         return ret
 
     def _parse_iri(self, s, loc, toks):
-        return rdflib.URIRef(toks[0][1:-1], self.baseiri)
+        iri = unescape_iri(toks[0][1:-1])
+        return rdflib.URIRef(iri, self.baseiri)
 
     def _parse_pname(self, s, loc, toks):
-        return self.engine.expand_pname(toks.prefix, toks.suffix)
+        local_name = unescape_local_name(toks.suffix)
+        return self.engine.expand_pname(toks.prefix, local_name)
 
     def _parse_turtleliteral(self, s, loc, toks):
         if toks.langtag:
@@ -273,16 +299,21 @@ class Parser(object):
             datatype = toks.datatype[0]
         else:
             datatype = None
-        return rdflib.Literal(toks[0][1:-1], langtag, datatype)
+        value = unescape_string(toks[0])
+        return rdflib.Literal(value, langtag, datatype)
 
     def _parse_as_list(self, s, loc, toks):
         return toks.asList()
 
     def _parse_collection(self, s, loc, toks):
-        graph = self.get_current_graph()
-        head = BNode()
-        col = RdfCollection(graph, head, toks.asList()[0])
-        return head
+        items = toks.asList()
+        if items:
+            graph = self.get_current_graph()
+            head = rdflib.BNode()
+            col = RdfCollection(graph, head, items)
+            return head
+        else:
+            return RDF_NIL
 
 
     def _parse_invpredicate(self, s, loc, toks):
@@ -359,6 +390,8 @@ class Parser(object):
 
 
     def parseString(self, txt):
+        if type(txt) is str:
+            txt = txt.decode("utf8")
         try:
             self.grammar.parseString(txt, True)
         except ParseException, ex:

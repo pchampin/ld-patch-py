@@ -23,9 +23,9 @@ I implement an engine executing an LD-Patch.
 
 from collections import namedtuple
 
-from rdflib import BNode, Literal, RDF, URIRef as IRI, Variable
+from rdflib import BNode, RDF, URIRef as IRI, Variable
 from rdflib.exceptions import UniquenessError
-
+from rfc3987 import parse as parse_iri
 
 InvIRI = namedtuple("InvIRI", ["iri"])
 
@@ -106,6 +106,15 @@ class PatchEngine(object):
             ret = self._bnodes.get(element)
             if ret is None:
                 ret = self._bnodes[element] = BNode()
+        elif typelt is IRI:
+            # invalid IRIs can result from \uxxxx or \Uxxxxxxxx encoding ;
+            # so this is not stricly speaking a ParserError,
+            # but rather a semantic error, hence its processing here
+            try:
+                parse_iri(element, rule="IRI")
+            except ValueError, ex:
+                raise PatchEvalError(ex.message)
+            ret = element
         else:
             ret = element
         return ret
@@ -157,7 +166,7 @@ class PatchEngine(object):
             if typval == Variable:
                 value = self.get_node(value)
             elif typval == BNode:
-                value = self.get_bnode(value)
+                value = self.get_node(value)
             return (value in nodeset)
 
     def updatelist_empty(self, udl_graph, subject, predicate, slice, udl_head):
@@ -237,7 +246,7 @@ class PatchEngine(object):
                 raise NoSuchListException()
 
             if old_lst == RDF.nil:
-                self.updatelist_empty(self, udl_graph, subject, predicate, slice, udl_head)
+                self.updatelist_empty(udl_graph, subject, predicate, slice, udl_head)
                 return
 
             idx1, idx2 = slice.idx1, slice.idx2

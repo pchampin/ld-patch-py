@@ -21,7 +21,7 @@ from os.path import dirname
 sys.path.append(dirname(dirname(__file__)))
 
 from nose.tools import assert_raises, assert_set_equal, eq_
-from rdflib import BNode as B, Graph, Namespace, Variable as V
+from rdflib import BNode as B, Graph, Literal, Namespace, Variable as V
 from rdflib.compare import isomorphic
 from rdflib.collection import Collection
 from unittest import skip
