@@ -169,35 +169,6 @@ class PatchEngine(object):
                 value = self.get_node(value)
             return (value in nodeset)
 
-    def updatelist_empty(self, udl_graph, subject, predicate, slice, udl_head):
-        if udl_head == RDF.nil:
-            return # replace empty list by empty list == noop
-        idx1, idx2 = slice.idx1, slice.idx2
-        if idx1 is not None and idx1 > 0:
-            raise OutOfBoundUpdateListException()
-        if idx2 is not None and idx2 > 0:
-            raise OutOfBoundUpdateListException()
-        if udl_head != RDF.nil:
-            self.add(udl_graph)
-            new_lst = self.get_node(udl_head)
-            self._graph.remove(subject, predicate, RDF.nil)
-            self._graph.add(subject, predicate, new_lst)
-
-    def replace_listnode(self, old_node, new_node):
-        graph = self._graph
-        graph_add = graph.add
-        graph_rem = graph.remove
-        for _, p, o in graph.triples((old_node, None, None)):
-            # we do not change RDF.first and RDF.rest,
-            # because old_node might still be part of the updated list
-            # (when *inserting* elements in a list)
-            if p != RDF.first and p != RDF.rest:
-                graph_rem((old_node, p, o))
-                graph_add((new_node, p, o))
-        for s, p, _ in graph.triples((None, None, old_node)):
-            graph_rem((s, p, old_node))
-            graph_add((s, p, new_node))
-
 
     # ldpatch commands
 
@@ -235,75 +206,52 @@ class PatchEngine(object):
 
     def updatelist(self, udl_graph, subject, predicate, slice, udl_head):
         try:
-            graph_value = self._graph.value
-            subject = self.get_node(subject)
-            predicate = self.get_node(predicate)
-            try:
-                old_lst = graph_value(subject, predicate, any=True)
-            except UniquenessError, ex:
-                raise
-            if old_lst is None:
+            target = self._graph
+            spre = self.get_node(subject)
+            ppre = self.get_node(predicate)
+            opre = target.value(spre, ppre, any=False)
+            if opre is None:
                 raise NoSuchListException()
+            imin, imax = slice.idx1, slice.idx2
 
-            if old_lst == RDF.nil:
-                self.updatelist_empty(udl_graph, subject, predicate, slice, udl_head)
-                return
+            i = 0
+            while (imin is not None and i < imin) \
+               or (imin is None and opre != RDF.nil):
+                spre, ppre, opre = \
+                    opre, RDF.rest, target.value(opre, RDF.rest, any=False)
+                if opre is None:
+                    raise MalformedListException("TODO message 1")
+                i += 1
+            print "===", "PRE", spre, ppre, opre, target.value(spre, RDF.first)
 
-            idx1, idx2 = slice.idx1, slice.idx2
+            spost, ppost, opost = spre, ppre, opre
+            while (imax is not None and i < imax) \
+               or (imax is None and opost != RDF.nil):
+                target.remove((spost, ppost, opost))
+                elt = target.value(opost, RDF.first, any=False)
+                if elt is None:
+                    raise MalformedListException("TODO message 2")
+                # TODO cut elt if bnode
+                print "===", "DEL", elt
+                target.remove((opost, RDF.first, elt))
+                spost, ppost, opost = \
+                    opost, RDF.rest, target.value(opost, RDF.rest, any=False)
+                if opost is None:
+                    raise MalformedListException("TODO message 3 ")
+                i += 1
+            print "===", "POST", spost, ppost, opost, target.value(spost, RDF.first)
 
-            # look for the left "anchor" for the new list
-            left_anchor = None
-            right_anchor = None
-            pred = None
-            to_clean = []
-            if idx1 is None:
-                assert idx2 is None # should be controlled by the parser
-                left_anchor = RDF.nil
+            target.remove((spre, ppre, opre))
+            target.remove((spost, ppost, opost))
+
+            if udl_head == RDF.nil:
+                target.add((spre, ppre, opost))
             else:
-                left_anchor = old_lst
-                i = 0
-                while idx1 is None or i < idx1:
-                    if left_anchor == RDF.nil:
-                        raise OutOfBoundUpdateListException()
-                    pred = left_anchor
-                    left_anchor = graph_value(left_anchor, RDF.rest, any=False)
-                    if left_anchor is None:
-                        raise MalformedListException()
-                    i += 1
-                if left_anchor == RDF.nil:
-                    if idx2 is not None and idx2 > idx1:
-                        raise OutOfBoundUpdateListException()
-
-                # look for the right "anchor" for the new list,
-                # and mark all intermediate nodes for cleaning
-                # NB: idx2 can be None, meaning "until the end"
-                right_anchor = left_anchor
-                while (i < idx2 or idx2 is None) and right_anchor != RDF.nil:
-                    to_clean.append(right_anchor)
-                    right_anchor = graph_value(right_anchor, RDF.rest, any=False)
-                    if right_anchor is None:
-                        raise MalformedListException()
-                    i += 1
-            assert left_anchor is not None
-
-            # add new list in the graph and link it adequately
-            assert udl_head != RDF.nil or len(udl_graph) == 0
-            self.add(udl_graph)
-            new_lst = self.get_node(udl_head)
-            if left_anchor == RDF.nil:
-                last_old = pred or _get_last_node(self._graph, old_lst)
-                self._graph.set((last_old, RDF.rest, new_lst))
-                assert len(to_clean) == 0
-            else:
-                if new_lst != RDF.nil:
-                    self.replace_listnode(left_anchor, new_lst)
-                    last_new = _get_last_node(self._graph, new_lst)
-                    self._graph.set((last_new, RDF.rest, right_anchor))
-                elif left_anchor != right_anchor:
-                    self.replace_listnode(left_anchor, right_anchor)
-                graph_remove = self._graph.remove
-                for i in to_clean:
-                    graph_remove((i, None, None))
+                self.add(udl_graph)
+                fst = self.get_node(udl_head)
+                lst = _get_last_node(target, fst)
+                target.add((spre, ppre, fst))
+                target.set((lst, RDF.rest, opost))
 
         except UniquenessError, ex:
             raise MalformedListException(ex.msg)
