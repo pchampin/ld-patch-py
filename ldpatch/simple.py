@@ -231,7 +231,7 @@ class Parser(object):
             + Optional( Suppress('=') + Object )("value")
             + Suppress(']'))
 
-        Graph = Suppress("{") + Optional(Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD)) + Suppress("}")
+        Graph = Suppress("{") + Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD) + Suppress("}")
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Path + PERIOD
         Add = ADD_CMD + Graph + PERIOD
