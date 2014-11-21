@@ -222,10 +222,11 @@ class Parser(object):
         Value = Iri | TtlLiteral | VARIABLE
 
         InvPredicate = Suppress('^') + Predicate
+        FirstStep = Optional(Suppress('/')) + (Predicate | InvPredicate | INDEX)
         Step = Suppress('/') + (Predicate | InvPredicate | INDEX)
         Filter = Forward()
         Constraint = ( Filter | UNICITY_CONSTRAINT )
-        Path = Group(ZeroOrMore(Step | Constraint))
+        Path = Group((FirstStep | Constraint) + ZeroOrMore(Step | Constraint))
         Filter << (Suppress('[')
             + Group(ZeroOrMore(Step | Constraint))("path") # Path (but copy required for naming)
             + Optional( Suppress('=') + Object )("value")
@@ -233,7 +234,7 @@ class Parser(object):
 
         Graph = Suppress("{") + Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD) + Suppress("}")
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
-        Bind = BIND_CMD + VARIABLE + Value + Path + PERIOD
+        Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
         Add = ADD_CMD + Graph + PERIOD
         Delete = DELETE_CMD + Graph + PERIOD
         UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + Collection \

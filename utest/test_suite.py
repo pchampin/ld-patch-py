@@ -50,7 +50,7 @@ if exists(TESTSUITE_PATH):
             return URIRef("{}{}".format(ns, suffix))
         def prefix(self, prefix, iri):
             self.prefices[prefix] = iri
-        def bind(self, variable, value, path):
+        def bind(self, variable, value, path=[]):
             pass
         def add(self, graph):
             pass

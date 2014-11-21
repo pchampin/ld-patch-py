@@ -56,7 +56,7 @@ class DummyEngine(object):
     def prefix(self, prefix, iri):
         self.operations.append(("prefix", prefix, iri))
 
-    def bind(self, variable, value, path):
+    def bind(self, variable, value, path=[]):
         self.operations.append(("bind", variable, value, path))
 
     def add(self, graph):
@@ -118,6 +118,10 @@ class TestSimpleParser(object):
 
     def test_bind_path(self):
         self.p.parseString("Bind ?x <http://ex.co/a>/ex:b/^ex:c/42 .")
+        eq_(("bind", V("x"), EX.a, [EX.b, InvIRI(EX.c), 42]), self.e.pop())
+
+    def test_bind_path_optional_leadin_slash(self):
+        self.p.parseString("Bind ?x <http://ex.co/a> ex:b/^ex:c/42 .")
         eq_(("bind", V("x"), EX.a, [EX.b, InvIRI(EX.c), 42]), self.e.pop())
 
     def test_bind_constrained_path(self):

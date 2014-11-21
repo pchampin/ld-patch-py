@@ -204,7 +204,7 @@ class PatchEngine(object):
     def prefix(self, prefix, iri):
         self._namespaces[prefix] = iri
 
-    def bind(self, variable, value, path):
+    def bind(self, variable, value, path=[]):
         assert isinstance(variable, Variable)
         path = list(path)
 
