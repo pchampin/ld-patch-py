@@ -197,12 +197,16 @@ class PatchEngine(object):
 
     def delete(self, del_graph):
         get_node = self.get_node
-        graph_rem = self._graph.remove
+        graph = self._graph
+        graph_rem = graph.remove
         for subject, predicate, object in del_graph:
             subject = get_node(subject)
             predicate = get_node(predicate)
             object= get_node(object)
-            graph_rem((subject, predicate, object))
+            triple = (subject, predicate, object)
+            if triple not in graph:
+                raise NoSuchTriple(triple)
+            graph_rem(triple)
 
     def updatelist(self, udl_graph, subject, predicate, slice, udl_head):
         try:
@@ -265,6 +269,11 @@ class NoUniqueMatch(PatchEvalError):
     def __init__(self, nodeset):
         Exception.__init__(self, "{!r}".format(nodeset))
         self.nodeset = nodeset
+
+class NoSuchTriple(PatchEvalError):
+    def __init__(self, triple):
+        Exception.__init__(self, "{} {} {}".format(*triple))
+        self.triple = triple
 
 class UnboundVariableError(PatchEvalError):
     pass
