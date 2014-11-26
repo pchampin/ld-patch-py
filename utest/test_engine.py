@@ -242,6 +242,25 @@ class TestPatchEngine(object):
         ])
         eq_(PA, self.e.get_node(V("pa")))
 
+    def test_cut_simple(self):
+        x = B("x")
+        y = B("y")
+        z = B("z")
+        self.g.add((PA, VOCAB.test, x))
+        self.g.add((x, VOCAB.foo, Literal("foo")))
+        self.g.add((x, VOCAB.bar, y))
+        self.g.add((y, VOCAB.foo, z))
+        self.g.add((y, VOCAB.bar, Literal("bar")))
+        self.g.add((z, VOCAB.foo, x))
+        self.g.add((z, VOCAB.bar, PA))
+        self.g.add((z, VOCAB.baz, z))
+
+        self.e.bind(V("x"), Literal("foo"), [InvIRI(VOCAB.foo),])
+        self.e.cut(V("x"))
+        exp = G(INITIAL)
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
     def test_add_simple(self):
         self.e.add(G([(PA, RDF.type, FOAF.Person)]))
         exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")

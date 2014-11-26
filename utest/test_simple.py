@@ -62,6 +62,9 @@ class DummyEngine(object):
     def add(self, graph):
         self.operations.append(("add", graph))
 
+    def cut(self, variable):
+        self.operations.append(("cut", variable))
+
     def delete(self, graph):
         self.operations.append(("delete", graph))
 
@@ -139,6 +142,14 @@ class TestSimpleParser(object):
     def test_bind_unicode(self):
         self.p.parseString("Bind ?Iñtërnâtiônàlizætiøn <http://ex.co/a> .")
         eq_(("bind", V("Iñtërnâtiônàlizætiøn"), URIRef("http://ex.co/a"), []), self.e.pop())
+
+    def test_cut(self):
+        self.p.parseString("Cut ?x .")
+        eq_(("cut", V("x")), self.e.pop())
+
+    def test_cut_abbr(self):
+        self.p.parseString("C ?x .")
+        eq_(("cut", V("x")), self.e.pop())
 
     def test_add_iris(self):
         self.p.parseString("Add { <http://ex.co/a> <http://ex.co/b> "

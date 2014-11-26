@@ -195,6 +195,23 @@ class PatchEngine(object):
             object = get_node(object)
             graph_add((subject, predicate, object))
 
+    def cut(self, var):
+        start = self.get_node(var)
+        if type(start) is not BNode:
+            raise CutExpectsBnode()
+
+        get_triples = self._graph.triples
+        rem_triple = self._graph.remove
+        queue = [start,]
+        while queue:
+            bn = queue.pop()
+            for trpl in get_triples((bn, None, None)):
+                rem_triple(trpl)
+                if type(trpl[2]) is BNode:
+                    queue.append(trpl[2])
+        for trpl in get_triples((None, None, start)):
+            rem_triple(trpl)
+
     def delete(self, del_graph):
         get_node = self.get_node
         graph = self._graph
@@ -274,6 +291,9 @@ class NoSuchTriple(PatchEvalError):
     def __init__(self, triple):
         Exception.__init__(self, "{} {} {}".format(*triple))
         self.triple = triple
+
+class CutExpectsBnode(PatchEvalError):
+    pass
 
 class UnboundVariableError(PatchEvalError):
     pass

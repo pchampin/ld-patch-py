@@ -110,6 +110,7 @@ SEMICOLON = Suppress(";")
 PERIOD = Suppress(".")
 BIND_CMD = Suppress(Literal("Bind") | Literal("B"))
 ADD_CMD = Suppress(Literal("Add") | Literal("A"))
+CUT_CMD = Suppress(Literal("Cut") | Literal("C"))
 DELETE_CMD = Suppress(Literal("Delete") | Literal("D"))
 UPDATELIST_CMD = Suppress(Literal("UpdateList") | Literal("UL"))
 
@@ -236,11 +237,12 @@ class Parser(object):
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
         Add = ADD_CMD + Graph + PERIOD
+        Cut = CUT_CMD + VARIABLE + PERIOD
         Delete = DELETE_CMD + Graph + PERIOD
         UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + Collection \
                    + PERIOD
 
-        Statement = Prefix | Bind | Add | Delete | UpdateList
+        Statement = Prefix | Bind | Add | Cut | Delete | UpdateList
         Patch = ZeroOrMore(Statement)
         Patch.ignore('#' + restOfLine) # Comment
         Patch.parseWithTabs()
@@ -257,6 +259,7 @@ class Parser(object):
         Prefix.setParseAction(self._do_prefix)
         Bind.setParseAction(self._do_bind)
         Add.setParseAction(self._do_add)
+        Cut.setParseAction(self._do_cut)
         Delete.setParseAction(self._do_delete)
         UpdateList.setParseAction(self._do_updatelist)
 
@@ -342,6 +345,11 @@ class Parser(object):
         self.in_prologue = False
         assert not toks, toks
         self.engine.add(self.get_current_graph(clear=True))
+
+    def _do_cut(self, s, loc, toks):
+        self.in_prologue = False
+        assert len(toks) == 1
+        self.engine.cut(toks[0])
 
     def _do_delete(self, s, loc, toks):
         self.in_prologue = False

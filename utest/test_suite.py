@@ -54,6 +54,8 @@ if exists(TESTSUITE_PATH):
             pass
         def add(self, graph):
             pass
+        def cut(self, var):
+            pass
         def delete(self, graph):
             pass
         def updatelist(self, graph, subject, predicate, slice, lst):
