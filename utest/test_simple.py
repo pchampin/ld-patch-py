@@ -123,10 +123,6 @@ class TestSimpleParser(object):
         self.p.parseString("Bind ?x <http://ex.co/a>/ex:b/^ex:c/42 .")
         eq_(("bind", V("x"), EX.a, [EX.b, InvIRI(EX.c), 42]), self.e.pop())
 
-    def test_bind_path_optional_leadin_slash(self):
-        self.p.parseString("Bind ?x <http://ex.co/a> ex:b/^ex:c/42 .")
-        eq_(("bind", V("x"), EX.a, [EX.b, InvIRI(EX.c), 42]), self.e.pop())
-
     def test_bind_constrained_path(self):
         self.p.parseString("Bind ?x <http://ex.co/a> /ex:b!/^ex:c[/ex:b!/^ex:c/42=0]!/42 .")
         eq_(("bind", V("x"), EX.a, [

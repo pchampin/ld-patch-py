@@ -223,11 +223,10 @@ class Parser(object):
         Value = Iri | TtlLiteral | VARIABLE
 
         InvPredicate = Suppress('^') + Predicate
-        FirstStep = Optional(Suppress('/')) + (Predicate | InvPredicate | INDEX)
         Step = Suppress('/') + (Predicate | InvPredicate | INDEX)
         Filter = Forward()
         Constraint = ( Filter | UNICITY_CONSTRAINT )
-        Path = Group((FirstStep | Constraint) + ZeroOrMore(Step | Constraint))
+        Path = Group(OneOrMore(Step | Constraint))
         Filter << (Suppress('[')
             + Group(ZeroOrMore(Step | Constraint))("path") # Path (but copy required for naming)
             + Optional( Suppress('=') + Object )("value")
