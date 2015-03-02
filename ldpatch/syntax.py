@@ -126,7 +126,7 @@ VARIABLE = Combine(
     Regex(r'[?$]') + ( PN_CHARS_U | Regex(r'[0-9]') )
     +  ZeroOrMore(PN_CHARS_U | Regex(u'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u2040]'))
 )
-INDEX = Regex(r'[0-9]+')
+INDEX = Regex(r'-?[0-9]+')
 UNICITY_CONSTRAINT = Literal('!')
 SLICE = INDEX + Optional('..' + Optional(INDEX) ) | '..'
 COMMA = Suppress(",")

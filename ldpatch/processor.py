@@ -73,6 +73,22 @@ def _get_last_node(graph, lst):
         last = nxt
     return last
 
+def _get_list_length(graph, lst):
+    """
+    Find the length of an RDF list
+    """
+    graph_value = graph.value
+    ret = 0
+    while lst != RDF.nil:
+        try:
+            lst = graph_value(lst, RDF.rest, any=False)
+        except UniquenessError:
+            lst = None
+        if lst is None:
+            raise MalformedListError()
+        ret += 1
+    return ret
+
 
 class PatchProcessor(object):
     """
@@ -271,6 +287,18 @@ class PatchProcessor(object):
             if opre is None:
                 raise NoUniqueMatchError("UpdateList", ppre, opre)
             imin, imax = aslice.idx1, aslice.idx2
+            length = None
+            if imin is not None and imin < 0:
+                length = _get_list_length(target, opre)
+                imin += length
+                if imin < 0:
+                    raise OutOfBoundUpdateListError("imin too small")
+            if imax is not None and imax < 0:
+                if length is None:
+                    length = _get_list_length(target, opre)
+                imax += length
+                if imax < 0:
+                    raise OutOfBoundUpdateListError("imax too small")
 
             i = 0
             while (imin is not None and i < imin) \
