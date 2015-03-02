@@ -20,7 +20,7 @@
 from os.path import abspath
 from urllib import pathname2url
 
-def apply(patch, graph, baseiri=None, init_ns=None, init_var=None, syntax="simple"):
+def apply(patch, graph, baseiri=None, init_ns=None, init_var=None, syntax="default"):
     """
     I parse `patch` (either a file-like or a string), and apply it to `graph`.
 
@@ -31,8 +31,8 @@ def apply(patch, graph, baseiri=None, init_ns=None, init_var=None, syntax="simpl
     * `init_var`: initial variables binding
     * `syntax`: concrete syntax used in `patch`
     """
-    if syntax == "simple":
-        from .simple import Parser
+    if syntax == "default":
+        from .syntax import Parser
     else:
         raise ValueError("Unknown LD-Patch syntax {}".format())
 
@@ -47,5 +47,5 @@ def apply(patch, graph, baseiri=None, init_ns=None, init_var=None, syntax="simpl
     if hasattr(patch, "read"):
         patch = patch.read()
 
-    from .engine import PatchEngine
-    Parser(PatchEngine(graph, init_ns, init_var), baseiri).parseString(patch)
+    from .processor import PatchProcessor
+    Parser(PatchProcessor(graph, init_ns, init_var), baseiri).parseString(patch)
