@@ -21,12 +21,9 @@ MF = Namespace("http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#")
 RDFT = Namespace("http://www.w3.org/ns/rdftest#")
 
 BLACKLIST = {
-    # not working because the Turtle parser in RDFlib does not parse
+    # not working because the Turtle parser in RDFlib does not fully support
     # unicodeEscapes in localNames:
     "localName_with_assigned_nfc_PN_CHARS_BASE_character_boundaries",
-    "localName_with_assigned_nfc_bmp_PN_CHARS_BASE_character_boundaries",
-    "localName_with_nfc_PN_CHARS_BASE_character_boundaries",
-    "localName_with_non_leading_extras",
 }
 
 class LdPatchTestSuite(TestCase):
