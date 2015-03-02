@@ -530,6 +530,58 @@ class TestPatchProcessor(object):
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
+    def test_updatelist_cut_bnodes(self):
+        bn = B()
+        self.g.set((self.g.value(PA, VOCAB.prefLang), RDF.first, bn))
+        self.g.set((bn, VOCAB.foo, Literal("foo")))
+        if not isomorphic(self.g, G(INITIAL.replace('''( "fr" "en" "tlh" )''', '''( [v:foo "foo"] "en" "tlh" )'''))):
+            raise ValueError("Error while setting up test...")
+        
+        self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 1), [])
+        exp = G(INITIAL.replace('''( "fr" "en" "tlh" )''', '''( "en" "tlh" )'''))
+        # NB: no trace for the arc  ''' _:nb v:foo "foo" ''' in the graph
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
+    def test_updatelist_outofbound_imin(self):
+        with assert_raises(OutOfBoundUpdateListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(4, None), [ Literal("a"), Literal("b") ])
+
+    def test_updatelist_outofbound_imax(self):
+        with assert_raises(OutOfBoundUpdateListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 4), [ Literal("a"), Literal("b") ])
+
+    def test_updatelist_malformed_rest_toomany_before(self):
+        self.g.add((self.g.value(PA, VOCAB.prefLang), RDF.rest, B()))
+        with assert_raises(MalformedListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
+
+    def test_updatelist_malformed_rest_toofew_before(self):
+        self.g.remove((self.g.value(PA, VOCAB.prefLang), RDF.rest, None))
+        with assert_raises(MalformedListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
+
+    def test_updatelist_malformed_rest_toomany(self):
+        self.g.add((self.g.value(PA, VOCAB.prefLang), RDF.rest, B()))
+        with assert_raises(MalformedListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
+
+    def test_updatelist_malformed_rest_toofew(self):
+        self.g.remove((self.g.value(PA, VOCAB.prefLang), RDF.rest, None))
+        with assert_raises(MalformedListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
+
+    def test_updatelist_malformed_first_toomany(self):
+        self.g.add((self.g.value(PA, VOCAB.prefLang), RDF.first, B()))
+        with assert_raises(MalformedListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
+
+    def test_updatelist_malformed_first_toofew(self):
+        self.g.remove((self.g.value(PA, VOCAB.prefLang), RDF.first, None))
+        with assert_raises(MalformedListException):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
+        
+
 
     # the following tests demonstrate how
     # complex identification schemes for bnodes are supported by ldpatch

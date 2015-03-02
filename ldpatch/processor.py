@@ -211,8 +211,11 @@ class PatchProcessor(object):
                 raise DeletingNonExistingTriple(triple)
             graph_rem(triple)
 
-    def cut(self, var):
-        start = self.get_node(var)
+    def cut(self, var, _override=None):
+        if _override:
+            start = _override
+        else:
+            start = self.get_node(var)
         if type(start) is not BNode:
             raise CutExpectsBnode()
 
@@ -241,29 +244,42 @@ class PatchProcessor(object):
             i = 0
             while (imin is not None and i < imin) \
                or (imin is None and opre != RDF.nil):
-                spre, ppre, opre = \
-                    opre, RDF.rest, target.value(opre, RDF.rest, any=False)
+                if opre == RDF.nil:
+                    raise OutOfBoundUpdateListException(
+                        "imin (%s) is greater than the length (%s)" % (imin, i))
+                try:
+                    spre, ppre, opre = \
+                        opre, RDF.rest, target.value(opre, RDF.rest, any=False)
+                except UniquenessError:
+                    opre = None
                 if opre is None:
-                    raise MalformedListException("TODO message 1")
+                    raise MalformedListException("Item %s has not exactly one rdf:rest" % i)
                 i += 1
-            print "===", "PRE", spre, ppre, opre, target.value(spre, RDF.first)
 
             spost, ppost, opost = spre, ppre, opre
             while (imax is not None and i < imax) \
                or (imax is None and opost != RDF.nil):
+                if opost == RDF.nil:
+                    raise OutOfBoundUpdateListException(
+                        "imax (%s) is greater than the length (%s)" % (imin, i))
                 target.remove((spost, ppost, opost))
-                elt = target.value(opost, RDF.first, any=False)
+                try:
+                    elt = target.value(opost, RDF.first, any=False)
+                except UniquenessError:
+                    elt = None
                 if elt is None:
-                    raise MalformedListException("TODO message 2")
-                # TODO cut elt if bnode
-                print "===", "DEL", elt
+                    raise MalformedListException("Item %s has not exactly one rdf:first" % i)
+                if type(elt) is BNode:
+                    self.cut(None, elt)
                 target.remove((opost, RDF.first, elt))
-                spost, ppost, opost = \
-                    opost, RDF.rest, target.value(opost, RDF.rest, any=False)
+                try:
+                    spost, ppost, opost = \
+                        opost, RDF.rest, target.value(opost, RDF.rest, any=False)
+                except UniquenessError:
+                    opost = None
                 if opost is None:
-                    raise MalformedListException("TODO message 3 ")
+                    raise MalformedListException("Item %s has not exactly one rdf:rest" % i)
                 i += 1
-            print "===", "POST", spost, ppost, opost, target.value(spost, RDF.first)
 
             target.remove((spre, ppre, opre))
             target.remove((spost, ppost, opost))
