@@ -13,8 +13,8 @@ from rdflib import Graph, Namespace, RDF, URIRef
 from rdflib.collection import Collection
 from rdflib.compare import isomorphic
 
-from ldpatch.engine import PatchEngine, PatchEvalError
-from ldpatch.simple import Parser, ParserError
+from ldpatch.processor import PatchProcessor, PatchEvalError
+from ldpatch.syntax import Parser, ParserError
 
 TESTSUITE_PATH = join(dirname(dirname(__file__)), "ld-patch-testsuite")
 MF = Namespace("http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#")
@@ -40,7 +40,7 @@ class LdPatchTestSuite(TestCase):
 
 if exists(TESTSUITE_PATH):
 
-    class DummyEngine(object):
+    class DummyProcessor(object):
         def __init__(self):
             self.prefices = {}
         def expand_pname(self, prefix, suffix=""):
@@ -54,9 +54,9 @@ if exists(TESTSUITE_PATH):
             pass
         def add(self, graph, addnew=False):
             pass
-        def cut(self, var):
-            pass
         def delete(self, graph, delex=False):
+            pass
+        def cut(self, var):
             pass
         def updatelist(self, graph, subject, predicate, slice, lst):
             pass
@@ -98,7 +98,7 @@ if exists(TESTSUITE_PATH):
                 def test_X(self, entry=entry):
                     action = get_value(entry, MF.action)
                     patch = urlopen(action).read()
-                    parser = Parser(DummyEngine(), action, True)
+                    parser = Parser(DummyProcessor(), action, True)
                     try:
                         parser.parseString(patch)
                     except ParserError, ex:
@@ -107,7 +107,7 @@ if exists(TESTSUITE_PATH):
                 def test_X(self, entry=entry):
                     action = get_value(entry, MF.action)
                     patch = urlopen(action).read()
-                    parser = Parser(DummyEngine(), action, True)
+                    parser = Parser(DummyProcessor(), action, True)
                     try:
                         parser.parseString(patch)
                         assert False,\
@@ -124,8 +124,8 @@ if exists(TESTSUITE_PATH):
                     data = Graph(); data.load(data_iri, format="turtle")
                     patch = urlopen(patch_iri).read()
                     result = Graph(); result.load(result_iri, format="turtle")
-                    engine = PatchEngine(data)
-                    parser = Parser(engine, base_iri, True)
+                    processor = PatchProcessor(data)
+                    parser = Parser(processor, base_iri, True)
                     try:
                         parser.parseString(patch)
                     except ParserError, ex:
@@ -147,8 +147,8 @@ if exists(TESTSUITE_PATH):
                     base_iri = get_value(action, NS.base) or data_iri
                     data = Graph(); data.load(data_iri, format="turtle")
                     patch = urlopen(patch_iri).read()
-                    engine = PatchEngine(data)
-                    parser = Parser(engine, base_iri, True)
+                    processor = PatchProcessor(data)
+                    parser = Parser(processor, base_iri, True)
                     try:
                         parser.parseString(patch)
                         assert False, 'expected PatchEvalError in <{}>'.format(

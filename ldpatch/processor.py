@@ -18,7 +18,7 @@
 #    along with RDF-PATCH.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-I implement an engine executing an LD-Patch.
+I implement a processor executing an LD-Patch.
 """
 
 from collections import namedtuple
@@ -64,7 +64,7 @@ def _get_last_node(graph, lst):
     return last
 
 
-class PatchEngine(object):
+class PatchProcessor(object):
     """
     An object actually doing the ldpatch
     """
@@ -198,6 +198,19 @@ class PatchEngine(object):
                 raise AddingExistingTriple(triple)
             graph_add(triple)
 
+    def delete(self, del_graph, delex=False):
+        get_node = self.get_node
+        graph = self._graph
+        graph_rem = graph.remove
+        for subject, predicate, object in del_graph:
+            subject = get_node(subject)
+            predicate = get_node(predicate)
+            object= get_node(object)
+            triple = (subject, predicate, object)
+            if delex and triple not in graph:
+                raise DeletingNonExistingTriple(triple)
+            graph_rem(triple)
+
     def cut(self, var):
         start = self.get_node(var)
         if type(start) is not BNode:
@@ -214,19 +227,6 @@ class PatchEngine(object):
                     queue.append(trpl[2])
         for trpl in get_triples((None, None, start)):
             rem_triple(trpl)
-
-    def delete(self, del_graph, delex=False):
-        get_node = self.get_node
-        graph = self._graph
-        graph_rem = graph.remove
-        for subject, predicate, object in del_graph:
-            subject = get_node(subject)
-            predicate = get_node(predicate)
-            object= get_node(object)
-            triple = (subject, predicate, object)
-            if delex and triple not in graph:
-                raise DeletingNonExistingTriple(triple)
-            graph_rem(triple)
 
     def updatelist(self, udl_graph, subject, predicate, slice, udl_head):
         try:

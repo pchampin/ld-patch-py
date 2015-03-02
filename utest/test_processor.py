@@ -26,7 +26,7 @@ from rdflib.compare import isomorphic
 from rdflib.collection import Collection
 from unittest import skip
 
-from ldpatch.engine import *
+from ldpatch.processor import *
 
 INITIAL = """
 @prefix v: <http://example.org/vocab#> .
@@ -75,10 +75,10 @@ def G(data):
 
 V = Variable
 
-class TestPatchEngine(object):
+class TestPatchProcessor(object):
     def setUp(self):
         self.g = G(INITIAL)
-        self.e = PatchEngine(self.g,
+        self.e = PatchProcessor(self.g,
                              {"foaf": IRI(FOAF), "vocab": IRI(VOCAB)})
         self.my_friends = { t[2] for t in self.g.triples((PA, FOAF.knows, None)) }
         self.ucbl = self.g.value(None, FOAF.member, PA)
@@ -91,7 +91,7 @@ class TestPatchEngine(object):
 
     def _my_updatelist(self, subj, pred, slice, items):
         """
-        I expose a simpler interface than PatchEngine.updatelist
+        I expose a simpler interface than PatchProcessor.updatelist
         """
         graph_lst = Graph()
         if len(items) == 0:
@@ -109,7 +109,7 @@ class TestPatchEngine(object):
             self.e.get_node(V("foo"))
 
     def test_getnode_variable(self):
-        self.e = PatchEngine(self.g, init_vars={V("x"): PA})
+        self.e = PatchProcessor(self.g, init_vars={V("x"): PA})
         eq_(PA, self.e.get_node(V("x")))
 
     def test_getnode_bnode_same_twice(self):

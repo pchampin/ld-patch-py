@@ -43,7 +43,7 @@ from re import compile as regex, VERBOSE
 import rdflib
 from rdflib.collection import Collection as RdfCollection
 
-import engine
+import processor
 
 RDF_NIL = rdflib.RDF.nil
 
@@ -111,9 +111,9 @@ PERIOD = Suppress(".")
 BIND_CMD = Suppress(Literal("Bind") | Literal("B"))
 ADD_CMD = Suppress(Literal("Add") | Literal("A"))
 ADDNEW_CMD = Suppress(Literal("AddNew") | Literal("AN"))
-CUT_CMD = Suppress(Literal("Cut") | Literal("C"))
 DELETE_CMD = Suppress(Literal("Delete") | Literal("D"))
 DELETEEXISTING_CMD = Suppress(Literal("DeleteExisting") | Literal("DE"))
+CUT_CMD = Suppress(Literal("Cut") | Literal("C"))
 UPDATELIST_CMD = Suppress(Literal("UpdateList") | Literal("UL"))
 
 
@@ -143,7 +143,7 @@ def parse_decimal(s, loc, toks):
 
 @VARIABLE.setParseAction
 def parse_variable(s, loc, toks):
-    return engine.Variable(toks[0][1:])
+    return processor.Variable(toks[0][1:])
 
 @INDEX.setParseAction
 def parse_index(s, loc, toks):
@@ -151,18 +151,18 @@ def parse_index(s, loc, toks):
 
 @UNICITY_CONSTRAINT.setParseAction
 def parse_unicityconstraint(s, loc, toks):
-    return engine.UNICITY_CONSTRAINT
+    return processor.UNICITY_CONSTRAINT
 
 @SLICE.setParseAction
 def parse_slice(s, loc, toks):
     if toks[0] == '..':   # ".."
-        return engine.Slice(None, None)
+        return processor.Slice(None, None)
     elif len(toks) == 1:  # <index>
-        return engine.Slice(toks[0], toks[0]+1)
+        return processor.Slice(toks[0], toks[0]+1)
     elif len(toks) == 2:  # <index> ".."
-        return engine.Slice(toks[0], None)
+        return processor.Slice(toks[0], None)
     else:                 # <index> ".." <index>
-        return engine.Slice(toks[0], toks[2])
+        return processor.Slice(toks[0], toks[2])
 
 
 # unescaping
@@ -195,8 +195,8 @@ def unescape_string(string):
 
 class Parser(object):
 
-    def __init__(self, engine, baseiri, strict=False):
-        self.reset(engine, baseiri, strict)
+    def __init__(self, processor, baseiri, strict=False):
+        self.reset(processor, baseiri, strict)
         PrefixedName = PNAME_LN | PNAME_NS
         Iri = IRIREF | PrefixedName
         BNode = BLANK_NODE_LABEL | ANON
@@ -239,13 +239,13 @@ class Parser(object):
         Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
         Add = ADD_CMD + Graph + PERIOD
         AddNew = ADDNEW_CMD + Graph + PERIOD
-        Cut = CUT_CMD + VARIABLE + PERIOD
         Delete = DELETE_CMD + Graph + PERIOD
         DeleteExisting = DELETEEXISTING_CMD + Graph + PERIOD
+        Cut = CUT_CMD + VARIABLE + PERIOD
         UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + Collection \
                    + PERIOD
 
-        Statement = Prefix | Bind | Add | AddNew | Cut | Delete | DeleteExisting | UpdateList
+        Statement = Prefix | Bind | Add | AddNew | Delete | DeleteExisting | Cut | UpdateList
         Patch = ZeroOrMore(Statement)
         Patch.ignore('#' + restOfLine) # Comment
         Patch.parseWithTabs()
@@ -263,9 +263,9 @@ class Parser(object):
         Bind.setParseAction(self._do_bind)
         Add.setParseAction(self._do_add)
         AddNew.setParseAction(self._do_add_new)
-        Cut.setParseAction(self._do_cut)
         Delete.setParseAction(self._do_delete)
         DeleteExisting.setParseAction(self._do_delete_existing)
+        Cut.setParseAction(self._do_cut)
         UpdateList.setParseAction(self._do_updatelist)
 
         # TODO reorder that
@@ -276,8 +276,8 @@ class Parser(object):
         Triples.setParseAction(self._parse_tss)
 
 
-    def reset(self, engine, baseiri, strict=False):
-        self.engine = engine
+    def reset(self, processor, baseiri, strict=False):
+        self.processor = processor
         self._current_graph = None
         self.baseiri = rdflib.URIRef(baseiri)
         self.strict = strict
@@ -297,7 +297,7 @@ class Parser(object):
 
     def _parse_pname(self, s, loc, toks):
         local_name = unescape_local_name(toks.suffix)
-        return self.engine.expand_pname(toks.prefix, local_name)
+        return self.processor.expand_pname(toks.prefix, local_name)
 
     def _parse_turtleliteral(self, s, loc, toks):
         if toks.langtag:
@@ -326,57 +326,57 @@ class Parser(object):
 
 
     def _parse_invpredicate(self, s, loc, toks):
-        return engine.InvIRI(toks[0])
+        return processor.InvIRI(toks[0])
 
     def _parse_filter(self, s, loc, toks):
         if toks.value:
             value = toks.value[0]
         else:
             value = None
-        return engine.PathConstraint(toks.path.asList(), value)
+        return processor.PathConstraint(toks.path.asList(), value)
     
     def _do_prefix(self, *args):
         if self.strict and not self.in_prologue:
             raise ParserError("Prefix declaration can only appear at the "
                               "start (in strict mode)")
         s, loc, toks = args[0], args[1], args[2]
-        self.engine.prefix(*toks[1:])
+        self.processor.prefix(*toks[1:])
 
     def _do_bind(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.bind(*toks)
+        self.processor.bind(*toks)
 
     def _do_add(self, s, loc, toks):
         try:
             self.in_prologue = False
             assert not toks, toks
-            self.engine.add(self.get_current_graph(clear=True), addnew=False)
+            self.processor.add(self.get_current_graph(clear=True), addnew=False)
         except TypeError, ex:
             raise Exception(ex)
 
     def _do_add_new(self, s, loc, toks):
         self.in_prologue = False
         assert not toks, toks
-        self.engine.add(self.get_current_graph(clear=True), addnew=True)
-
-    def _do_cut(self, s, loc, toks):
-        self.in_prologue = False
-        assert len(toks) == 1
-        self.engine.cut(toks[0])
+        self.processor.add(self.get_current_graph(clear=True), addnew=True)
 
     def _do_delete(self, s, loc, toks):
         self.in_prologue = False
         assert not toks, toks
-        self.engine.delete(self.get_current_graph(clear=True), delex=False)
+        self.processor.delete(self.get_current_graph(clear=True), delex=False)
 
     def _do_delete_existing(self, s, loc, toks):
         self.in_prologue = False
         assert not toks, toks
-        self.engine.delete(self.get_current_graph(clear=True), delex=True)
+        self.processor.delete(self.get_current_graph(clear=True), delex=True)
+
+    def _do_cut(self, s, loc, toks):
+        self.in_prologue = False
+        assert len(toks) == 1
+        self.processor.cut(toks[0])
 
     def _do_updatelist(self, s, loc, toks):
         self.in_prologue = False
-        self.engine.updatelist(self.get_current_graph(clear=True), *toks)
+        self.processor.updatelist(self.get_current_graph(clear=True), *toks)
 
 
     # TODO reorder that

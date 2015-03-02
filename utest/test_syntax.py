@@ -24,8 +24,8 @@ from rdflib import BNode as B, Graph, Literal, Namespace, RDF, URIRef, Variable 
 from rdflib.collection import Collection
 from rdflib.compare import isomorphic
 
-from ldpatch.engine import InvIRI, PathConstraint, Slice, UNICITY_CONSTRAINT
-from ldpatch.simple import Parser, ParserError
+from ldpatch.processor import InvIRI, PathConstraint, Slice, UNICITY_CONSTRAINT
+from ldpatch.syntax import Parser, ParserError
 
 EX = Namespace("http://ex.co/")
 
@@ -40,7 +40,7 @@ def eqg_(got, expected):
 def _s(graph):
     return graph.serialize(format="n3")
     
-class DummyEngine(object):
+class DummyProcessor(object):
     def __init__(self):
         self.operations = []
 
@@ -62,11 +62,11 @@ class DummyEngine(object):
     def add(self, graph, addnew=False):
         self.operations.append(("add", graph))
 
-    def cut(self, variable):
-        self.operations.append(("cut", variable))
-
     def delete(self, graph, delex=False):
         self.operations.append(("delete", graph))
+
+    def cut(self, variable):
+        self.operations.append(("cut", variable))
 
     def updatelist(self, graph, subject, predicate, slice, lst):
         self.operations.append(("updatelist", subject, predicate, slice, lst, graph))
@@ -74,7 +74,7 @@ class DummyEngine(object):
 
 class TestStrictParser(object):
     def setUp(self):
-        self.e = DummyEngine()
+        self.e = DummyProcessor()
         self.p = Parser(self.e, EX[''], True)
 
     def test_prefix_in_the_middle(self):
@@ -85,9 +85,9 @@ class TestStrictParser(object):
             @prefix ex: <http://exammple.org/> .
             """)
 
-class TestSimpleParser(object):
+class TestParser(object):
     def setUp(self):
-        self.e = DummyEngine()
+        self.e = DummyProcessor()
         self.p = Parser(self.e, EX[''])
 
     def tearDown(self):
