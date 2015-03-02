@@ -152,7 +152,7 @@ class PatchProcessor(object):
             return { i for i in nodeset if self.test_path_constraint(i, pathelt) }
         elif pathelt is UNICITY_CONSTRAINT:
             if len(nodeset) != 1:
-                raise NoUniqueMatch(None, pathelt, nodeset)
+                raise NoUniqueMatchError(None, pathelt, nodeset)
             return nodeset
         else:
             raise TypeError("Unrecognized path element {!r}".format(pathelt))
@@ -165,7 +165,7 @@ class PatchProcessor(object):
                 nodeset = self.do_path_step(nodeset, pathelt)
                 if len(nodeset) == 0:
                     return False
-        except NoUniqueMatch:
+        except NoUniqueMatchError:
             return False
 
         if constraint.value is None:
@@ -195,11 +195,11 @@ class PatchProcessor(object):
         try:
             for step in path:
                 nodeset = self.do_path_step(nodeset, step)
-        except NoUniqueMatch, ex:
+        except NoUniqueMatchError, ex:
             ex.variable = variable
             raise
         if len(nodeset) != 1:
-            raise NoUniqueMatch(variable, "end", nodeset)
+            raise NoUniqueMatchError(variable, "end", nodeset)
         self._variables[variable] =  iter(nodeset).next()
 
     def add(self, add_graph, addnew=False):
@@ -213,7 +213,7 @@ class PatchProcessor(object):
             objct = get_node(objct)
             triple = (subject, predicate, objct)
             if addnew and triple in graph:
-                raise AddingExistingTriple(triple)
+                raise AddNewError(triple)
             graph_add(triple)
 
     def delete(self, del_graph, delex=False):
@@ -227,7 +227,7 @@ class PatchProcessor(object):
             objct= get_node(objct)
             triple = (subject, predicate, objct)
             if delex and triple not in graph:
-                raise DeletingNonExistingTriple(triple)
+                raise DeleteExistingError(triple)
             graph_rem(triple)
 
     def cut(self, var, _override=None):
@@ -237,7 +237,7 @@ class PatchProcessor(object):
         else:
             start = self.get_node(var)
         if type(start) is not BNode:
-            raise CutExpectsBnode()
+            raise CutExpectsBnodeError()
 
         did_something = False
         get_triples = self._graph.triples
@@ -254,7 +254,7 @@ class PatchProcessor(object):
             did_something = True
             rem_triple(trpl)
         if not did_something:
-            raise CutLoneNode()
+            raise CurRemovedNothing()
 
 
     def updatelist(self, udl_graph, subject, predicate, aslice, udl_head):
@@ -269,14 +269,14 @@ class PatchProcessor(object):
             except UniquenessError:
                 opre = None
             if opre is None:
-                raise NoUniqueMatch("UpdateList", ppre, opre)
+                raise NoUniqueMatchError("UpdateList", ppre, opre)
             imin, imax = aslice.idx1, aslice.idx2
 
             i = 0
             while (imin is not None and i < imin) \
                or (imin is None and opre != RDF.nil):
                 if opre == RDF.nil:
-                    raise OutOfBoundUpdateListException(
+                    raise OutOfBoundUpdateListError(
                         "imin (%s) is greater than the length (%s)" % (imin, i))
                 try:
                     spre, ppre, opre = \
@@ -284,14 +284,14 @@ class PatchProcessor(object):
                 except UniquenessError:
                     opre = None
                 if opre is None:
-                    raise MalformedListException("Item %s has not exactly one rdf:rest" % i)
+                    raise MalformedListError("Item %s has not exactly one rdf:rest" % i)
                 i += 1
 
             spost, ppost, opost = spre, ppre, opre
             while (imax is not None and i < imax) \
                or (imax is None and opost != RDF.nil):
                 if opost == RDF.nil:
-                    raise OutOfBoundUpdateListException(
+                    raise OutOfBoundUpdateListError(
                         "imax (%s) is greater than the length (%s)" % (imin, i))
                 target.remove((spost, ppost, opost))
                 try:
@@ -299,7 +299,7 @@ class PatchProcessor(object):
                 except UniquenessError:
                     elt = None
                 if elt is None:
-                    raise MalformedListException("Item %s has not exactly one rdf:first" % i)
+                    raise MalformedListError("Item %s has not exactly one rdf:first" % i)
                 if type(elt) is BNode:
                     self.cut(None, elt)
                 target.remove((opost, RDF.first, elt))
@@ -309,7 +309,7 @@ class PatchProcessor(object):
                 except UniquenessError:
                     opost = None
                 if opost is None:
-                    raise MalformedListException("Item %s has not exactly one rdf:rest" % i)
+                    raise MalformedListError("Item %s has not exactly one rdf:rest" % i)
                 i += 1
 
             target.remove((spre, ppre, opre))
@@ -325,7 +325,7 @@ class PatchProcessor(object):
                 target.set((lst, RDF.rest, opost))
 
         except UniquenessError, ex:
-            raise MalformedListException(ex.msg)
+            raise MalformedListError(ex.msg)
 
 
 
@@ -333,36 +333,45 @@ class PatchEvalError(Exception):
     """Subclass of all errors generated by an LD Patch processor"""
     pass
 
-class NoUniqueMatch(PatchEvalError):
-    """Error raised when a Path Expression does not match exactly one node"""
-    def __init__(self, variable, step, nodeset):
-        PatchEvalError.__init__(self, "{!r}".format(nodeset))
-        self.variable = variable
-        self.step = step
-        self.nodeset = nodeset
 
-    def __str__(self):
-        return "NoUniqueMatch for ?{} at {} (result: {!r})".format(
-            self.variable, self.step, self.nodeset)
-
-class AddingExistingTriple(PatchEvalError):
+class AddNewError(PatchEvalError):
     """Error raised by AddNew if a triple already exists"""
     def __init__(self, triple):
         PatchEvalError.__init__(self, "{} {} {}".format(*triple))
         self.triple = triple
 
-class DeletingNonExistingTriple(PatchEvalError):
+class CutExpectsBnodeError(PatchEvalError):
+    """Error raised when Cut is applied to a node which is not a blank node"""
+    pass
+
+class CurRemovedNothing(PatchEvalError):
+    """Error raised when Cut is applied to a node with no arc"""
+    pass
+
+class DeleteExistingError(PatchEvalError):
     """Error raised by DeleteExisting if a triple does not exist"""
     def __init__(self, triple):
         PatchEvalError.__init__(self, "{} {} {}".format(*triple))
         self.triple = triple
 
-class CutExpectsBnode(PatchEvalError):
-    """Error raised when Cut is applied to a node which is not a blank node"""
+class MalformedListError(PatchEvalError):
+    """Error raised when UpdateList is applied to a malformed list"""
     pass
 
-class CutLoneNode(PatchEvalError):
-    """Error raised when Cut is applied to a node with no arc"""
+class NoUniqueMatchError(PatchEvalError):
+    """Error raised when a Path Expression does not match exactly one node"""
+    def __init__(self, variable, step, nodeset):
+        PatchEvalError.__init__(self)
+        self.variable = variable
+        self.step = step
+        self.nodeset = nodeset
+
+    def __str__(self):
+        return "NoUniqueMatch for ?{} at {} (result: {})".format(
+            self.variable, self.step, self.nodeset)
+
+class OutOfBoundUpdateListError(PatchEvalError):
+    """Error raised when the slice in UpdateList exceeds the length of the list"""
     pass
 
 class UnboundVariableError(PatchEvalError):
@@ -373,10 +382,3 @@ class UndefinedPrefixError(PatchEvalError):
     """Error raised when using an undefined prefix"""
     pass
 
-class MalformedListException(PatchEvalError):
-    """Error raised when UpdateList is applied to a malformed list"""
-    pass
-
-class OutOfBoundUpdateListException(PatchEvalError):
-    """Error raised when the slice in UpdateList exceeds the length of the list"""
-    pass

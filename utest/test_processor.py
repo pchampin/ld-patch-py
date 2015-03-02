@@ -181,11 +181,11 @@ class TestPatchProcessor(object):
         assert_set_equal({PA}, self.e.do_path_step({PA}, UNICITY_CONSTRAINT))
 
     def test_dopathstep_unique_multiple_start(self):
-        with assert_raises(NoUniqueMatch):
+        with assert_raises(NoUniqueMatchError):
             self.e.do_path_step(self.my_friends, UNICITY_CONSTRAINT)
 
     def test_dopathstep_unique_zero_start(self):
-        with assert_raises(NoUniqueMatch):
+        with assert_raises(NoUniqueMatchError):
             self.e.do_path_step({}, UNICITY_CONSTRAINT)
 
     def test_pathconstraint_simple(self):
@@ -228,11 +228,11 @@ class TestPatchProcessor(object):
         eq_(VOCAB.bar, self.e.get_node(V("foo")))
 
     def test_bind_too_few(self):
-        with assert_raises(NoUniqueMatch):
+        with assert_raises(NoUniqueMatchError):
             self.e.bind(V("foo"), PA, [VOCAB.notUsed])
 
     def test_bind_too_many(self):
-        with assert_raises(NoUniqueMatch):
+        with assert_raises(NoUniqueMatchError):
             self.e.bind(V("foo"), PA, [FOAF.knows])
 
     def test_bind_from_variable(self):
@@ -395,11 +395,11 @@ class TestPatchProcessor(object):
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_cut_wrong_node(self):
-        with assert_raises(CutExpectsBnode):
+        with assert_raises(CutExpectsBnodeError):
             self.e.cut(PA)
 
     def test_cut_fails(self):
-        with assert_raises(CutLoneNode):
+        with assert_raises(CurRemovedNothing):
             self.e.cut(B())
         
 
@@ -554,51 +554,51 @@ class TestPatchProcessor(object):
         assert isomorphic(got, exp), got.serialize(format="turtle")
 
     def test_updatelist_outofbound_imin(self):
-        with assert_raises(OutOfBoundUpdateListException):
+        with assert_raises(OutOfBoundUpdateListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(4, None), [ Literal("a"), Literal("b") ])
 
     def test_updatelist_outofbound_imax(self):
-        with assert_raises(OutOfBoundUpdateListException):
+        with assert_raises(OutOfBoundUpdateListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 4), [ Literal("a"), Literal("b") ])
 
     def test_updatelist_too_many_matches(self):
         self.g.add((PA, VOCAB.prefLang, RDF.nil))
-        with assert_raises(NoUniqueMatch):
+        with assert_raises(NoUniqueMatchError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
 
     def test_updatelist_too_few_matches(self):
         self.g.remove((PA, VOCAB.prefLang, None))
-        with assert_raises(NoUniqueMatch):
+        with assert_raises(NoUniqueMatchError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
 
     def test_updatelist_malformed_rest_toomany_before(self):
         self.g.add((self.g.value(PA, VOCAB.prefLang), RDF.rest, B()))
-        with assert_raises(MalformedListException):
+        with assert_raises(MalformedListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
 
     def test_updatelist_malformed_rest_toofew_before(self):
         self.g.remove((self.g.value(PA, VOCAB.prefLang), RDF.rest, None))
-        with assert_raises(MalformedListException):
+        with assert_raises(MalformedListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
 
     def test_updatelist_malformed_rest_toomany(self):
         self.g.add((self.g.value(PA, VOCAB.prefLang), RDF.rest, B()))
-        with assert_raises(MalformedListException):
+        with assert_raises(MalformedListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
 
     def test_updatelist_malformed_rest_toofew(self):
         self.g.remove((self.g.value(PA, VOCAB.prefLang), RDF.rest, None))
-        with assert_raises(MalformedListException):
+        with assert_raises(MalformedListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
 
     def test_updatelist_malformed_first_toomany(self):
         self.g.add((self.g.value(PA, VOCAB.prefLang), RDF.first, B()))
-        with assert_raises(MalformedListException):
+        with assert_raises(MalformedListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
 
     def test_updatelist_malformed_first_toofew(self):
         self.g.remove((self.g.value(PA, VOCAB.prefLang), RDF.first, None))
-        with assert_raises(MalformedListException):
+        with assert_raises(MalformedListError):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
 
     def test_updatelist_malformed_udl_1(self):
