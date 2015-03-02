@@ -17,12 +17,17 @@
 #
 #    You should have received a copy of the GNU Lesser General Public License
 #    along with RDF-PATCH.  If not, see <http://www.gnu.org/licenses/>.
+"""
+Command line tool for LD Patch
+"""
+
+# invalid module name #pylint: disable=C0103
 
 from os.path import abspath, dirname
 from sys import argv, path, stdin, stdout
 
 try:
-    import ldpatch
+    import ldpatch # unused import #pylint: disable=W0611
 except ImportError, ex:
     try:
         SOURCE_DIR = dirname(dirname(abspath(__file__)))
@@ -42,7 +47,7 @@ if len(argv) not in (2, 3) or "--help" in argv:
     exit(-1)
 
 from rdflib import Graph
-from ldpatch import apply
+from ldpatch import apply as ldpatch_apply
 
 g = Graph()
 g.load(stdin, format="turtle")
@@ -53,6 +58,6 @@ else:
     baseiri = None
 
 with open(argv[1]) as f:
-    apply(f, g, baseiri)
+    ldpatch_apply(f, g, baseiri)
 
 g.serialize(stdout, format="turtle")
