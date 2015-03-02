@@ -143,7 +143,7 @@ class PatchProcessor(object):
             return { i for i in nodeset if self.test_path_constraint(i, pathelt) }
         elif pathelt is UNICITY_CONSTRAINT:
             if len(nodeset) != 1:
-                raise NoUniqueMatch(nodeset)
+                raise NoUniqueMatch(None, pathelt, nodeset)
             return nodeset
         else:
             raise TypeError("Unrecognized path element {!r}".format(pathelt))
@@ -180,10 +180,14 @@ class PatchProcessor(object):
         path = list(path)
 
         nodeset = {self.get_node(value)}
-        for step in path:
-            nodeset = self.do_path_step(nodeset, step)
+        try:
+            for step in path:
+                nodeset = self.do_path_step(nodeset, step)
+        except NoUniqueMatch, ex:
+            ex.variable = variable
+            raise
         if len(nodeset) != 1:
-            raise NoUniqueMatch(nodeset)
+            raise NoUniqueMatch(variable, "end", nodeset)
         self._variables[variable] =  iter(nodeset).next()
 
     def add(self, add_graph, addnew=False):
@@ -302,9 +306,15 @@ class PatchEvalError(Exception):
     pass
 
 class NoUniqueMatch(PatchEvalError):
-    def __init__(self, nodeset):
+    def __init__(self, variable, step, nodeset):
         Exception.__init__(self, "{!r}".format(nodeset))
+        self.variable = variable
+        self.step = step
         self.nodeset = nodeset
+
+    def __str__(self):
+        return "NoUniqueMatch for ?%s at %s (result: %r)" % (
+            self.variable, self.step, self.nodeset)
 
 class AddingExitsingTriple(PatchEvalError):
     def __init__(self, triple):
