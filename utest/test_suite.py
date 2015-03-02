@@ -52,11 +52,11 @@ if exists(TESTSUITE_PATH):
             self.prefices[prefix] = iri
         def bind(self, variable, value, path=[]):
             pass
-        def add(self, graph):
+        def add(self, graph, addnew=False):
             pass
         def cut(self, var):
             pass
-        def delete(self, graph):
+        def delete(self, graph, delex=False):
             pass
         def updatelist(self, graph, subject, predicate, slice, lst):
             pass

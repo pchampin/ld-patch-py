@@ -186,14 +186,17 @@ class PatchEngine(object):
             raise NoUniqueMatch(nodeset)
         self._variables[variable] =  iter(nodeset).next()
 
-    def add(self, add_graph):
+    def add(self, add_graph, addnew=False):
         get_node = self.get_node
         graph_add = self._graph.add
         for subject, predicate, object in add_graph:
             subject = get_node(subject)
             predicate = get_node(predicate)
             object = get_node(object)
-            graph_add((subject, predicate, object))
+            triple = (subject, predicate, object)
+            if addnew and triple in graph:
+                raise AddingExistingTriple(triple)
+            graph_add(triple)
 
     def cut(self, var):
         start = self.get_node(var)
@@ -212,7 +215,7 @@ class PatchEngine(object):
         for trpl in get_triples((None, None, start)):
             rem_triple(trpl)
 
-    def delete(self, del_graph):
+    def delete(self, del_graph, delex=False):
         get_node = self.get_node
         graph = self._graph
         graph_rem = graph.remove
@@ -221,8 +224,8 @@ class PatchEngine(object):
             predicate = get_node(predicate)
             object= get_node(object)
             triple = (subject, predicate, object)
-            if triple not in graph:
-                raise NoSuchTriple(triple)
+            if delex and triple not in graph:
+                raise DeletingNonExistingTriple(triple)
             graph_rem(triple)
 
     def updatelist(self, udl_graph, subject, predicate, slice, udl_head):
@@ -287,7 +290,12 @@ class NoUniqueMatch(PatchEvalError):
         Exception.__init__(self, "{!r}".format(nodeset))
         self.nodeset = nodeset
 
-class NoSuchTriple(PatchEvalError):
+class AddingExitsingTriple(PatchEvalError):
+    def __init__(self, triple):
+        Exception.__init__(self, "{} {} {}".format(*triple))
+        self.triple = triple
+
+class DeleteNonExitsingTriple(PatchEvalError):
     def __init__(self, triple):
         Exception.__init__(self, "{} {} {}".format(*triple))
         self.triple = triple

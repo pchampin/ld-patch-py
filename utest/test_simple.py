@@ -59,13 +59,13 @@ class DummyEngine(object):
     def bind(self, variable, value, path=[]):
         self.operations.append(("bind", variable, value, path))
 
-    def add(self, graph):
+    def add(self, graph, addnew=False):
         self.operations.append(("add", graph))
 
     def cut(self, variable):
         self.operations.append(("cut", variable))
 
-    def delete(self, graph):
+    def delete(self, graph, delex=False):
         self.operations.append(("delete", graph))
 
     def updatelist(self, graph, subject, predicate, slice, lst):

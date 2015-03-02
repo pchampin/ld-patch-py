@@ -110,8 +110,10 @@ SEMICOLON = Suppress(";")
 PERIOD = Suppress(".")
 BIND_CMD = Suppress(Literal("Bind") | Literal("B"))
 ADD_CMD = Suppress(Literal("Add") | Literal("A"))
+ADDNEW_CMD = Suppress(Literal("AddNew") | Literal("AN"))
 CUT_CMD = Suppress(Literal("Cut") | Literal("C"))
 DELETE_CMD = Suppress(Literal("Delete") | Literal("D"))
+DELETEEXISTING_CMD = Suppress(Literal("DeleteExisting") | Literal("DE"))
 UPDATELIST_CMD = Suppress(Literal("UpdateList") | Literal("UL"))
 
 
@@ -236,12 +238,14 @@ class Parser(object):
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
         Add = ADD_CMD + Graph + PERIOD
+        AddNew = ADDNEW_CMD + Graph + PERIOD
         Cut = CUT_CMD + VARIABLE + PERIOD
         Delete = DELETE_CMD + Graph + PERIOD
+        DeleteExisting = DELETEEXISTING_CMD + Graph + PERIOD
         UpdateList = UPDATELIST_CMD + Subject + Predicate + SLICE + Collection \
                    + PERIOD
 
-        Statement = Prefix | Bind | Add | Cut | Delete | UpdateList
+        Statement = Prefix | Bind | Add | AddNew | Cut | Delete | DeleteExisting | UpdateList
         Patch = ZeroOrMore(Statement)
         Patch.ignore('#' + restOfLine) # Comment
         Patch.parseWithTabs()
@@ -258,8 +262,10 @@ class Parser(object):
         Prefix.setParseAction(self._do_prefix)
         Bind.setParseAction(self._do_bind)
         Add.setParseAction(self._do_add)
+        AddNew.setParseAction(self._do_add_new)
         Cut.setParseAction(self._do_cut)
         Delete.setParseAction(self._do_delete)
+        DeleteExisting.setParseAction(self._do_delete_existing)
         UpdateList.setParseAction(self._do_updatelist)
 
         # TODO reorder that
@@ -341,9 +347,17 @@ class Parser(object):
         self.engine.bind(*toks)
 
     def _do_add(self, s, loc, toks):
+        try:
+            self.in_prologue = False
+            assert not toks, toks
+            self.engine.add(self.get_current_graph(clear=True), addnew=False)
+        except TypeError, ex:
+            raise Exception(ex)
+
+    def _do_add_new(self, s, loc, toks):
         self.in_prologue = False
         assert not toks, toks
-        self.engine.add(self.get_current_graph(clear=True))
+        self.engine.add(self.get_current_graph(clear=True), addnew=True)
 
     def _do_cut(self, s, loc, toks):
         self.in_prologue = False
@@ -353,7 +367,12 @@ class Parser(object):
     def _do_delete(self, s, loc, toks):
         self.in_prologue = False
         assert not toks, toks
-        self.engine.delete(self.get_current_graph(clear=True))
+        self.engine.delete(self.get_current_graph(clear=True), delex=False)
+
+    def _do_delete_existing(self, s, loc, toks):
+        self.in_prologue = False
+        assert not toks, toks
+        self.engine.delete(self.get_current_graph(clear=True), delex=True)
 
     def _do_updatelist(self, s, loc, toks):
         self.in_prologue = False
