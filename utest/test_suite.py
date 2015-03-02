@@ -91,9 +91,12 @@ if exists(TESTSUITE_PATH):
                 def test_X(self):
                     pass
             elif approval != RDFT.Approved:
-                @skip("Unapproved entry {}".format(entry))
-                def test_X(self):
-                    pass
+                #### do not pollute the test output with skipped tests
+                #@skip("Unapproved entry {}".format(entry))
+                #def test_X(self):
+                #    pass
+                #### instead:
+                continue
             elif etype == NS.PositiveSyntaxTest:
                 def test_X(self, entry=entry):
                     action = get_value(entry, MF.action)
