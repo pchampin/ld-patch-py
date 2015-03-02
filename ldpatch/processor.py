@@ -62,9 +62,12 @@ def _get_last_node(graph, lst):
     last = lst
     graph_value = graph.value
     while True:
-        nxt = graph_value(last, RDF.rest, any=False)
+        try:
+            nxt = graph_value(last, RDF.rest, any=False)
+        except UniquenessError:
+            nxt = None
         if nxt is None:
-            raise MalformedListException()
+            raise ValueError("Malformed list passed to UpdateList")
         if nxt == RDF.nil:
             break
         last = nxt
@@ -236,17 +239,23 @@ class PatchProcessor(object):
         if type(start) is not BNode:
             raise CutExpectsBnode()
 
+        did_something = False
         get_triples = self._graph.triples
         rem_triple = self._graph.remove
         queue = [start,]
         while queue:
             bnode = queue.pop()
             for trpl in get_triples((bnode, None, None)):
+                did_something = True
                 rem_triple(trpl)
                 if type(trpl[2]) is BNode:
                     queue.append(trpl[2])
         for trpl in get_triples((None, None, start)):
+            did_something = True
             rem_triple(trpl)
+        if not did_something:
+            raise CutLoneNode()
+
 
     def updatelist(self, udl_graph, subject, predicate, aslice, udl_head):
         """Process an UpdateList command"""
@@ -255,9 +264,12 @@ class PatchProcessor(object):
             target = self._graph
             spre = self.get_node(subject)
             ppre = self.get_node(predicate)
-            opre = target.value(spre, ppre, any=False)
+            try:
+                opre = target.value(spre, ppre, any=False)
+            except UniquenessError:
+                opre = None
             if opre is None:
-                raise NoSuchListException()
+                raise NoUniqueMatch("UpdateList", ppre, opre)
             imin, imax = aslice.idx1, aslice.idx2
 
             i = 0
@@ -349,16 +361,16 @@ class CutExpectsBnode(PatchEvalError):
     """Error raised when Cut is applied to a node which is not a blank node"""
     pass
 
+class CutLoneNode(PatchEvalError):
+    """Error raised when Cut is applied to a node with no arc"""
+    pass
+
 class UnboundVariableError(PatchEvalError):
     """Error raised when using an unbound variable"""
     pass
 
 class UndefinedPrefixError(PatchEvalError):
     """Error raised when using an undefined prefix"""
-    pass
-
-class NoSuchListException(PatchEvalError):
-    """Error raised when UpdateList is applied to a node which is not a list"""
     pass
 
 class MalformedListException(PatchEvalError):

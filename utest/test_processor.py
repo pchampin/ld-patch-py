@@ -243,25 +243,6 @@ class TestPatchProcessor(object):
         ])
         eq_(PA, self.e.get_node(V("pa")))
 
-    def test_cut_simple(self):
-        x = B("x")
-        y = B("y")
-        z = B("z")
-        self.g.add((PA, VOCAB.test, x))
-        self.g.add((x, VOCAB.foo, Literal("foo")))
-        self.g.add((x, VOCAB.bar, y))
-        self.g.add((y, VOCAB.foo, z))
-        self.g.add((y, VOCAB.bar, Literal("bar")))
-        self.g.add((z, VOCAB.foo, x))
-        self.g.add((z, VOCAB.bar, PA))
-        self.g.add((z, VOCAB.baz, z))
-
-        self.e.bind(V("x"), Literal("foo"), [InvIRI(VOCAB.foo),])
-        self.e.cut(V("x"))
-        exp = G(INITIAL)
-        got = self.g
-        assert isomorphic(got, exp), got.serialize(format="turtle")
-
     def test_add_simple(self):
         self.e.add(G([(PA, RDF.type, FOAF.Person)]))
         exp = G(INITIAL + """<http://champin.net/#pa> a f:Person .""")
@@ -393,6 +374,34 @@ class TestPatchProcessor(object):
         exp = G(INITIAL)
         got = self.g
         assert isomorphic(got, exp), got.serialize(format="turtle")
+
+    def test_cut_simple(self):
+        x = B("x")
+        y = B("y")
+        z = B("z")
+        self.g.add((PA, VOCAB.test, x))
+        self.g.add((x, VOCAB.foo, Literal("foo")))
+        self.g.add((x, VOCAB.bar, y))
+        self.g.add((y, VOCAB.foo, z))
+        self.g.add((y, VOCAB.bar, Literal("bar")))
+        self.g.add((z, VOCAB.foo, x))
+        self.g.add((z, VOCAB.bar, PA))
+        self.g.add((z, VOCAB.baz, z))
+
+        self.e.bind(V("x"), Literal("foo"), [InvIRI(VOCAB.foo),])
+        self.e.cut(V("x"))
+        exp = G(INITIAL)
+        got = self.g
+        assert isomorphic(got, exp), got.serialize(format="turtle")
+
+    def test_cut_wrong_node(self):
+        with assert_raises(CutExpectsBnode):
+            self.e.cut(PA)
+
+    def test_cut_fails(self):
+        with assert_raises(CutLoneNode):
+            self.e.cut(B())
+        
 
     def test_updatelist_item(self):
         self._my_updatelist(PA, VOCAB.prefLang, Slice(1, 2), [ Literal("en-US") ])
@@ -552,6 +561,16 @@ class TestPatchProcessor(object):
         with assert_raises(OutOfBoundUpdateListException):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(0, 4), [ Literal("a"), Literal("b") ])
 
+    def test_updatelist_too_many_matches(self):
+        self.g.add((PA, VOCAB.prefLang, RDF.nil))
+        with assert_raises(NoUniqueMatch):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
+
+    def test_updatelist_too_few_matches(self):
+        self.g.remove((PA, VOCAB.prefLang, None))
+        with assert_raises(NoUniqueMatch):
+            self._my_updatelist(PA, VOCAB.prefLang, Slice(1, None), [])
+
     def test_updatelist_malformed_rest_toomany_before(self):
         self.g.add((self.g.value(PA, VOCAB.prefLang), RDF.rest, B()))
         with assert_raises(MalformedListException):
@@ -581,6 +600,31 @@ class TestPatchProcessor(object):
         self.g.remove((self.g.value(PA, VOCAB.prefLang), RDF.first, None))
         with assert_raises(MalformedListException):
             self._my_updatelist(PA, VOCAB.prefLang, Slice(0, None), [])
+
+    def test_updatelist_malformed_udl_1(self):
+        with assert_raises(ValueError):
+            graph_lst = Graph()
+            head = B("head")
+            graph_lst.add((B("head"), RDF.first, Literal("a")));
+            graph_lst.add((B("head"), RDF.rest, B("n1")));
+            graph_lst.add((B("n1"), RDF.first, Literal("b")));
+            graph_lst.add((B("n1"), RDF.rest, B("n2")));
+            graph_lst.add((B("n2"), RDF.first, Literal("c")));
+            self.e.updatelist(graph_lst, PA, VOCAB.prefLang, Slice(1,None), B("head"))
+
+    def test_updatelist_malformed_udl_2(self):
+        with assert_raises(ValueError):
+            graph_lst = Graph()
+            head = B("head")
+            graph_lst.add((B("head"), RDF.first, Literal("a")));
+            graph_lst.add((B("head"), RDF.rest, B("n1")));
+            graph_lst.add((B("n1"), RDF.first, Literal("b")));
+            graph_lst.add((B("n1"), RDF.rest, B("n2")));
+            graph_lst.add((B("n2"), RDF.first, Literal("c")));
+            graph_lst.add((B("n2"), RDF.rest, RDF.nil));
+            graph_lst.add((B("n2"), RDF.rest, B("n3")));
+            self.e.updatelist(graph_lst, PA, VOCAB.prefLang, Slice(1,None), B("head"))
+
         
 
 
