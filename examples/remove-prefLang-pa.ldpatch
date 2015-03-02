@@ -11,4 +11,4 @@ Bind ?pa <http://champin.net/#pa> .
 # first remove all elements from the list...
 UpdateList ?pa v:prefLang 0.. () .
 # ... then delete the remaining arc
-Delete ?pa v:prefLang rdf:nil .
+Delete { ?pa v:prefLang rdf:nil } .

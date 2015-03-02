@@ -6,6 +6,6 @@
 
 Bind ?alex 
      <http://champin.net/#pa>/foaf:knows
-        [foaf:holdsAccount/foaf:accountName="bertails"] .
+        [/foaf:holdsAccount/foaf:accountName="bertails"] .
 
 UpdateList ?alex v:prefLang 0.. ( "fr" "en" ) .
