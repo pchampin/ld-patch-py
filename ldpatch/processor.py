@@ -1,25 +1,27 @@
 # -*- coding: utf-8 -*-
 
-#    This file is part of RDF-PATCH
-#    Copyright (C) 2013 Pierre-Antoine Champin <pchampin@liris.cnrs.fr> /
+#    This file is part of LD-PATCH-PY
+#    Copyright (C) 2013-2015 Pierre-Antoine Champin <pchampin@liris.cnrs.fr> /
 #    Universite de Lyon <http://www.universite-lyon.fr>
 #
-#    RDF-PATCH is free software: you can redistribute it and/or modify
+#    LD-PATCH-PY is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Lesser General Public License as published
 #    by the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
 #
-#    RDF-PATCH is distributed in the hope that it will be useful,
+#    LD-PATCH-PY is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU Lesser General Public License for more details.
 #
 #    You should have received a copy of the GNU Lesser General Public License
-#    along with RDF-PATCH.  If not, see <http://www.gnu.org/licenses/>.
+#    along with LD-PATCH-PY.  If not, see <http://www.gnu.org/licenses/>.
 
 """
 I implement a processor executing an LD-Patch.
 """
+
+# pylint: disable=W0142,R0801
 
 from collections import namedtuple
 
@@ -31,6 +33,8 @@ InvIRI = namedtuple("InvIRI", ["iri"])
 
 _PathConstraintBase = namedtuple("PathConstraint", ["path", "value"])
 class PathConstraint(_PathConstraintBase):
+    """A constraint appearing in a Path Expression"""
+    #pylint: disable=R0903
     def __new__(cls, path, value=None):
         return _PathConstraintBase.__new__(cls, path, value)
 
@@ -42,7 +46,10 @@ Slice = namedtuple("Slice", ["idx1", "idx2"])
 """
 
 class _UnicityConstraintSingleton(object):
-    def __repr_(self):
+    """A singleton class for representing the unicity constraint
+    in Path Expressions"""
+    #pylint: disable=R0903
+    def __repr__(self):
         return "UNICITY_CONSTRAINT"
 UNICITY_CONSTRAINT = _UnicityConstraintSingleton()
 
@@ -120,22 +127,21 @@ class PatchProcessor(object):
         return ret
 
     def do_path_step(self, nodeset, pathelt):
+        """Process one step of a Path Expression"""
         typelt = type(pathelt)
         if typelt is IRI:
-            return {
-                trpl[2]
-                    for subj in nodeset
-                    for trpl in self._graph.triples((subj, pathelt, None))
-            }
+            return { trpl[2]
+                     for subj in nodeset
+                     for trpl in self._graph.triples((subj, pathelt, None))
+                   }
         elif typelt is InvIRI:
-            return {
-                trpl[0]
-                    for obj in nodeset
-                    for trpl in self._graph.triples((None, pathelt.iri, obj))
-            }
+            return { trpl[0]
+                     for obj in nodeset
+                     for trpl in self._graph.triples((None, pathelt.iri, obj))
+                   }
         elif typelt is int:
             ret = set(nodeset)
-            for i in range(pathelt):
+            for _ in range(pathelt):
                 ret = self.do_path_step(ret, RDF.rest)
             ret = self.do_path_step(ret, RDF.first)
             return ret
@@ -149,6 +155,7 @@ class PatchProcessor(object):
             raise TypeError("Unrecognized path element {!r}".format(pathelt))
 
     def test_path_constraint(self, node, constraint):
+        """Check a constraint in a Path Expression"""
         nodeset = {node}
         try:
             for pathelt in constraint.path:
@@ -167,15 +174,17 @@ class PatchProcessor(object):
                 value = self.get_node(value)
             elif typval == BNode:
                 value = self.get_node(value)
-            return (value in nodeset)
+            return (value in nodeset) #pylint: disable=C0325
 
 
     # ldpatch commands
 
     def prefix(self, prefix, iri):
+        """Process a Prefix command"""
         self._namespaces[prefix] = iri
 
-    def bind(self, variable, value, path=[]):
+    def bind(self, variable, value, path=()):
+        """Process a Bind command"""
         assert isinstance(variable, Variable)
         path = list(path)
 
@@ -191,31 +200,35 @@ class PatchProcessor(object):
         self._variables[variable] =  iter(nodeset).next()
 
     def add(self, add_graph, addnew=False):
+        """Process an Add or AnnNew command"""
         get_node = self.get_node
-        graph_add = self._graph.add
-        for subject, predicate, object in add_graph:
+        graph = self._graph
+        graph_add = graph.add
+        for subject, predicate, objct in add_graph:
             subject = get_node(subject)
             predicate = get_node(predicate)
-            object = get_node(object)
-            triple = (subject, predicate, object)
+            objct = get_node(objct)
+            triple = (subject, predicate, objct)
             if addnew and triple in graph:
                 raise AddingExistingTriple(triple)
             graph_add(triple)
 
     def delete(self, del_graph, delex=False):
+        """Process a Delete or DeleteExisting command"""
         get_node = self.get_node
         graph = self._graph
         graph_rem = graph.remove
-        for subject, predicate, object in del_graph:
+        for subject, predicate, objct in del_graph:
             subject = get_node(subject)
             predicate = get_node(predicate)
-            object= get_node(object)
-            triple = (subject, predicate, object)
+            objct= get_node(objct)
+            triple = (subject, predicate, objct)
             if delex and triple not in graph:
                 raise DeletingNonExistingTriple(triple)
             graph_rem(triple)
 
     def cut(self, var, _override=None):
+        """Process a Cut command"""
         if _override:
             start = _override
         else:
@@ -227,15 +240,17 @@ class PatchProcessor(object):
         rem_triple = self._graph.remove
         queue = [start,]
         while queue:
-            bn = queue.pop()
-            for trpl in get_triples((bn, None, None)):
+            bnode = queue.pop()
+            for trpl in get_triples((bnode, None, None)):
                 rem_triple(trpl)
                 if type(trpl[2]) is BNode:
                     queue.append(trpl[2])
         for trpl in get_triples((None, None, start)):
             rem_triple(trpl)
 
-    def updatelist(self, udl_graph, subject, predicate, slice, udl_head):
+    def updatelist(self, udl_graph, subject, predicate, aslice, udl_head):
+        """Process an UpdateList command"""
+        #pylint: disable=R0912,R0913,R0914,R0915
         try:
             target = self._graph
             spre = self.get_node(subject)
@@ -243,7 +258,7 @@ class PatchProcessor(object):
             opre = target.value(spre, ppre, any=False)
             if opre is None:
                 raise NoSuchListException()
-            imin, imax = slice.idx1, slice.idx2
+            imin, imax = aslice.idx1, aslice.idx2
 
             i = 0
             while (imin is not None and i < imin) \
@@ -303,43 +318,53 @@ class PatchProcessor(object):
 
 
 class PatchEvalError(Exception):
+    """Subclass of all errors generated by an LD Patch processor"""
     pass
 
 class NoUniqueMatch(PatchEvalError):
+    """Error raised when a Path Expression does not match exactly one node"""
     def __init__(self, variable, step, nodeset):
-        Exception.__init__(self, "{!r}".format(nodeset))
+        PatchEvalError.__init__(self, "{!r}".format(nodeset))
         self.variable = variable
         self.step = step
         self.nodeset = nodeset
 
     def __str__(self):
-        return "NoUniqueMatch for ?%s at %s (result: %r)" % (
+        return "NoUniqueMatch for ?{} at {} (result: {!r})".format(
             self.variable, self.step, self.nodeset)
 
-class AddingExitsingTriple(PatchEvalError):
+class AddingExistingTriple(PatchEvalError):
+    """Error raised by AddNew if a triple already exists"""
     def __init__(self, triple):
-        Exception.__init__(self, "{} {} {}".format(*triple))
+        PatchEvalError.__init__(self, "{} {} {}".format(*triple))
         self.triple = triple
 
-class DeleteNonExitsingTriple(PatchEvalError):
+class DeletingNonExistingTriple(PatchEvalError):
+    """Error raised by DeleteExisting if a triple does not exist"""
     def __init__(self, triple):
-        Exception.__init__(self, "{} {} {}".format(*triple))
+        PatchEvalError.__init__(self, "{} {} {}".format(*triple))
         self.triple = triple
 
 class CutExpectsBnode(PatchEvalError):
+    """Error raised when Cut is applied to a node which is not a blank node"""
     pass
 
 class UnboundVariableError(PatchEvalError):
+    """Error raised when using an unbound variable"""
     pass
 
 class UndefinedPrefixError(PatchEvalError):
+    """Error raised when using an undefined prefix"""
     pass
 
 class NoSuchListException(PatchEvalError):
+    """Error raised when UpdateList is applied to a node which is not a list"""
     pass
 
 class MalformedListException(PatchEvalError):
+    """Error raised when UpdateList is applied to a malformed list"""
     pass
 
 class OutOfBoundUpdateListException(PatchEvalError):
+    """Error raised when the slice in UpdateList exceeds the length of the list"""
     pass
