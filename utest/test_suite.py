@@ -124,9 +124,9 @@ if exists(TESTSUITE_PATH):
                     patch_iri = get_value(action, NS.patch)
                     base_iri = get_value(action, NS.base) or data_iri
                     result_iri = get_value(entry, MF.result)
-                    data = Graph(); data.load(data_iri, format="turtle")
+                    data = Graph(); data.load(data_iri, publicID=base_iri, format="turtle")
                     patch = urlopen(patch_iri).read()
-                    result = Graph(); result.load(result_iri, format="turtle")
+                    result = Graph(); result.load(result_iri, publicID=base_iri, format="turtle")
                     processor = PatchProcessor(data)
                     parser = Parser(processor, base_iri, True)
                     try:
@@ -148,7 +148,7 @@ if exists(TESTSUITE_PATH):
                     data_iri = get_value(action, NS.data)
                     patch_iri = get_value(action, NS.patch)
                     base_iri = get_value(action, NS.base) or data_iri
-                    data = Graph(); data.load(data_iri, format="turtle")
+                    data = Graph(); data.load(data_iri, publicID=base_iri, format="turtle")
                     patch = urlopen(patch_iri).read()
                     processor = PatchProcessor(data)
                     parser = Parser(processor, base_iri, True)
