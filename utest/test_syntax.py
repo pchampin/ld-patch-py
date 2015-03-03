@@ -150,6 +150,13 @@ class TestParser(object):
         self.p.parseString("C ?x .")
         eq_(("cut", V("x")), self.e.pop())
 
+    def test_add_empty(self):
+        # NB: only in non-strict mode
+        self.p.parseString("Add {}.")
+        cmd, graph = self.e.pop()
+        eq_("add", cmd)
+        eqg_(graph, [])
+
     def test_add_iris(self):
         self.p.parseString("Add { <http://ex.co/a> <http://ex.co/b> "
                            "<http://ex.co/c> }.")

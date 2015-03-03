@@ -245,6 +245,7 @@ class Parser(object):
 
     In non-strict mode:
     * prefix declaration can occur anywhere in the LD Patch document
+    * empty graphs are allowed in Add[New]/Delete[Existing]
     """
 
     def __init__(self, processor, baseiri, strict=False):
@@ -294,8 +295,10 @@ class Parser(object):
                    #     because we want to set a name for that component
 
         Graph = (Suppress("{") +
-                 Triples + ZeroOrMore(PERIOD + Triples) +
-                 Optional(PERIOD) + Suppress("}"))
+                 Optional(
+                     Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD)
+                 ) +
+                 Suppress("}"))
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
         Add = ADD_CMD + Graph + PERIOD
@@ -343,13 +346,16 @@ class Parser(object):
         self.strict = strict
         self.in_prologue = True
 
-    def get_current_graph(self, clear=False):
+    def get_current_graph(self, clear=False, check_empty=False):
         """Return the current graph, creating it if needed"""
         ret = self._current_graph
         if ret is None:
             self._current_graph = ret = rdflib.Graph()
         if clear:
             self._current_graph = None
+        if check_empty and len(ret) == 0:
+            if self.strict:
+                raise ParserError("Empty graph")
         return ret
 
 
@@ -457,7 +463,9 @@ class Parser(object):
         try:
             self.in_prologue = False
             assert not toks, toks
-            self.processor.add(self.get_current_graph(clear=True), addnew=False)
+            self.processor.add(
+                self.get_current_graph(clear=True, check_empty=True),
+                addnew=False)
         except TypeError, ex:
             raise Exception(ex)
 
@@ -465,19 +473,25 @@ class Parser(object):
         # pylint: disable=C0111,W0613
         self.in_prologue = False
         assert not toks, toks
-        self.processor.add(self.get_current_graph(clear=True), addnew=True)
+        self.processor.add(
+            self.get_current_graph(clear=True, check_empty=True),
+            addnew=True)
 
     def _do_delete(self, s, loc, toks):
         # pylint: disable=C0111,W0613
         self.in_prologue = False
         assert not toks, toks
-        self.processor.delete(self.get_current_graph(clear=True), delex=False)
+        self.processor.delete(
+            self.get_current_graph(clear=True, check_empty=True),
+            delex=False)
 
     def _do_delete_existing(self, s, loc, toks):
         # pylint: disable=C0111,W0613
         self.in_prologue = False
         assert not toks, toks
-        self.processor.delete(self.get_current_graph(clear=True), delex=True)
+        self.processor.delete(
+            self.get_current_graph(clear=True, check_empty=True),
+            delex=True)
 
     def _do_cut(self, s, loc, toks):
         # pylint: disable=C0111,W0613
