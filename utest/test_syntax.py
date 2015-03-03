@@ -61,10 +61,12 @@ class DummyProcessor(object):
         self.operations.append(("bind", variable, value, path))
 
     def add(self, graph, addnew=False):
-        self.operations.append(("add", graph))
+        self.operations.append(("add" + ("new" if addnew else ""),
+                                graph))
 
     def delete(self, graph, delex=False):
-        self.operations.append(("delete", graph))
+        self.operations.append(("delete" + ("existing" if delex else ""),
+                                graph))
 
     def cut(self, variable):
         self.operations.append(("cut", variable))
@@ -416,7 +418,38 @@ class TestParser(object):
         eqg_(graph, [(EX.a, EX.b, EX.c)])
 
     # assuming that parsing the 'Delete' graph is the same as
-    # parsing the 'Add' the graph, we do not duplicate all the tests
+    # parsing the 'Add' the graph, we do not duplicate all the tests ;
+    # idem for AddNew and DeleteExisting below.
+
+    def test_addnew(self):
+        self.p.parseString("AddNew { <http://ex.co/a> <http://ex.co/b> "
+                           "         <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "addnew")
+        eq_(len(graph), 1)
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
+
+    def test_addnew_abbr(self):
+        self.p.parseString("AN { <http://ex.co/a> <http://ex.co/b> "
+                           "    <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "addnew")
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
+
+    def test_deleteexisting(self):
+        self.p.parseString("DeleteExisting { <http://ex.co/a> <http://ex.co/b> "
+                           "         <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "deleteexisting")
+        eq_(len(graph), 1)
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
+
+    def test_deleteexisting_abbr(self):
+        self.p.parseString("DE { <http://ex.co/a> <http://ex.co/b> "
+                           "    <http://ex.co/c> } .")
+        cmd, graph = self.e.pop()
+        eq_(cmd, "deleteexisting")
+        eqg_(graph, [(EX.a, EX.b, EX.c)])
 
     def test_updatelist_point(self):
         self.p.parseString("UpdateList ?x ex:p 3 ( <http://ex.co/a> ex:b \"foo\" 42 ) .")
