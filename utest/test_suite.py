@@ -106,7 +106,7 @@ if exists(TESTSUITE_PATH):
                 @skip("Blacklisted entry {}".format(entry))
                 def test_X(self):
                     pass
-            elif approval != RDFT.Approved:
+            elif approval == NS.Skipped:
                 #### do not pollute the test output with skipped tests
                 #@skip("Unapproved entry {}".format(entry))
                 #def test_X(self):
