@@ -137,7 +137,7 @@ class PatchProcessor(object):
             # so this is not stricly speaking a ParserError,
             # but rather a semantic error, hence its processing here
             try:
-                parse_iri(element, rule="IRI")
+                parse_iri(unicode(element), rule="IRI")
             except ValueError, ex:
                 raise PatchEvalError(ex.message)
             ret = element
