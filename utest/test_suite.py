@@ -24,7 +24,7 @@ The test suite can be downloaded from
 <https://github.com/pchampin/ld-patch-testsuite>
 .
 """
-from os.path import dirname, exists, join
+from os.path import abspath, dirname, exists, join
 from unittest import skip, TestCase
 from urllib import pathname2url, urlopen
 
@@ -40,9 +40,9 @@ MF = Namespace("http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#")
 RDFT = Namespace("http://www.w3.org/ns/rdftest#")
 
 BLACKLIST = {
-    # not working because the Turtle parser in RDFlib does not fully support
-    # unicodeEscapes in localNames:
     "localName_with_assigned_nfc_PN_CHARS_BASE_character_boundaries",
+    "localName_with_assigned_nfc_PN_CHARS_BASE_character_boundaries__reverted",
+    # not working because module rfc3987 does not recognize it as a valid IRI
 }
 
 class LdPatchTestSuite(TestCase):
