@@ -164,6 +164,7 @@ if exists(TESTSUITE_PATH):
                     data_iri = get_value(action, NS.data)
                     patch_iri = get_value(action, NS.patch)
                     base_iri = get_value(action, NS.base) or data_iri
+                    statusCode = int(get_value(entry, NS.statusCode))
                     data = Graph(); data.load(data_iri, publicID=base_iri, format="turtle")
                     patch = urlopen(patch_iri).read()
                     processor = PatchProcessor(data)
@@ -173,8 +174,10 @@ if exists(TESTSUITE_PATH):
                         assert False, 'expected PatchEvalError in <{}>'.format(
                             patch_iri
                         )
-                    except PatchEvalError:
-                        pass
+                    except PatchEvalError, ex:
+                        assert ex.statusCode == statusCode, \
+                            "Expected statusCode {}, got {}".format(
+                                statusCode, ex.statusCode)
             else:
                 @skip("Unknown test type {}".format(etype))
                 def test_X(self):
