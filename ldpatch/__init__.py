@@ -24,7 +24,7 @@ Python implementation of LD Patch.
 from os.path import abspath
 from urllib import pathname2url
 
-__version__ = "0.1"
+__version__ = "0.9"
 
 def apply(patch, graph, baseiri=None, init_ns=None, init_var=None, syntax="default"):
     """

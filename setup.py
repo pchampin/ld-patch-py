@@ -39,6 +39,6 @@ setup(name = 'ldpatch',
       platforms='OS Independant',
       url='http://github.com/pchampin/ld-patch-py',
       include_package_data=True,
-      INSTALL_REQuires=INSTALL_REQ,
+      install_requires=INSTALL_REQ,
       scripts=['bin/ldpatch-apply'],
      )
