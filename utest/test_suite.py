@@ -138,7 +138,7 @@ if exists(TESTSUITE_PATH):
                     action = get_value(entry, MF.action)
                     data_iri = get_value(action, NS.data)
                     patch_iri = get_value(action, NS.patch)
-                    base_iri = get_value(action, NS.base) or data_iri
+                    base_iri = URIRef(get_value(action, NS.base) or data_iri)
                     result_iri = get_value(entry, MF.result)
                     data = Graph(); data.load(data_iri, publicID=base_iri, format="turtle")
                     patch = urlopen(patch_iri).read()
@@ -163,7 +163,7 @@ if exists(TESTSUITE_PATH):
                     action = get_value(entry, MF.action)
                     data_iri = get_value(action, NS.data)
                     patch_iri = get_value(action, NS.patch)
-                    base_iri = get_value(action, NS.base) or data_iri
+                    base_iri = URIRef(get_value(action, NS.base) or data_iri)
                     statusCode = int(get_value(entry, NS.statusCode))
                     data = Graph(); data.load(data_iri, publicID=base_iri, format="turtle")
                     patch = urlopen(patch_iri).read()
