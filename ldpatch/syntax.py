@@ -244,6 +244,7 @@ class Parser(object):
       see below)
 
     In non-strict mode:
+    * Turtle comments can be used anywhere in the LD Patch document
     * prefix declaration can occur anywhere in the LD Patch document
     * empty graphs are allowed in Add[New]/Delete[Existing]
     """
@@ -293,12 +294,15 @@ class Parser(object):
                    + Suppress(']'))
                    # (*) we can not reuse the Path rule defined above,
                    #     because we want to set a name for that component
+        Turtle = Optional(
+            Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD)
+            + Suppress(Optional("#" + restOfLine))
+              # the 'ignore' below does not seem to allow comments there,
+              # so I added it explictly
+        )
+        Turtle.ignore("#" + restOfLine) # Comment
+        Graph = (Suppress("{") + Turtle + Suppress("}"))
 
-        Graph = (Suppress("{") +
-                 Optional(
-                     Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD)
-                 ) +
-                 Suppress("}"))
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
         Add = ADD_CMD + Graph + PERIOD
@@ -311,7 +315,8 @@ class Parser(object):
 
         Statement = Prefix | Bind | Add | AddNew | Delete | DeleteExisting | Cut | UpdateList
         Patch = ZeroOrMore(Statement)
-        Patch.ignore('#' + restOfLine) # Comment
+        if not strict:
+            Patch.ignore('#' + restOfLine) # Comment
         Patch.parseWithTabs()
 
         self.grammar = Patch
