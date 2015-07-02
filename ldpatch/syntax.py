@@ -294,14 +294,8 @@ class Parser(object):
                    + Suppress(']'))
                    # (*) we can not reuse the Path rule defined above,
                    #     because we want to set a name for that component
-        Turtle = Optional(
-            Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD)
-            + Suppress(Optional("#" + restOfLine))
-              # the 'ignore' below does not seem to allow comments there,
-              # so I added it explictly
-        )
-        Turtle.ignore("#" + restOfLine) # Comment
-        Graph = (Suppress("{") + Turtle + Suppress("}"))
+        Turtle =  Triples + ZeroOrMore(PERIOD + Triples) + Optional(PERIOD)
+        Graph = (Suppress("{") + Optional(Turtle) + Suppress("}"))
 
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
         Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
