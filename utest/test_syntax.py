@@ -87,6 +87,12 @@ class TestStrictParser(object):
                    <http://example.org/c> } .
             @prefix ex: <http://exammple.org/> .
             """)
+            
+    def test_prefix_sparql(self):
+        with assert_raises(ParserError):
+            self.p.parseString("""
+            PrEfIx ex: <http://exammple.org/>
+            """)
 
 class TestParser(object):
     def setUp(self):
@@ -110,6 +116,10 @@ class TestParser(object):
         self.p.parseString("@prefix : <http://ex.co/> .")
         eq_(("prefix", "", URIRef("http://ex.co/")), self.e.pop())
 
+    def test_prefix_sparql(self):
+        self.p.parseString("PrEfIx ex: <http://ex.co/>")
+        eq_(("prefix", "ex", URIRef("http://ex.co/")), self.e.pop())
+        
     def test_bind(self):
         self.p.parseString("Bind ?x <http://ex.co/a> .")
         eq_(("bind", V("x"), EX.a, []), self.e.pop())

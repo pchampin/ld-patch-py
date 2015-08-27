@@ -39,7 +39,7 @@ To prevent re-generating the grammar for each new ldpatch,
 Parser has a ``reset`` method that allows to restart it afresh.
 
 """
-from pyparsing import Combine, Forward, Group, Keyword, Literal, OneOrMore, \
+from pyparsing import CaselessKeyword, Combine, Forward, Group, Keyword, Literal, OneOrMore, \
     Optional, ParseException, Regex, restOfLine, Suppress, ZeroOrMore
 from re import compile as regex, VERBOSE
 
@@ -298,6 +298,9 @@ class Parser(object):
         Graph = (Suppress("{") + Optional(Turtle) + Suppress("}"))
 
         Prefix = Literal("@prefix") + PNAME_NS + IRIREF + PERIOD
+        if not strict:
+            SparqlPrefix = CaselessKeyword("prefix") + PNAME_NS + IRIREF
+            Prefix = Prefix | SparqlPrefix
         Bind = BIND_CMD + VARIABLE + Value + Optional(Path) + PERIOD
         Add = ADD_CMD + Graph + PERIOD
         AddNew = ADDNEW_CMD + Graph + PERIOD
