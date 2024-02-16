@@ -55,13 +55,13 @@ RDF_NIL = rdflib.RDF.nil
 # http://www.w3.org/TR/2013/REC-sparql11-query-20130321/
 
 PLX = Regex(r"%[0-9a-fA-F]{2}|\\[_~.\-!$&\'()*+,;=/?#@%]")
-PN_CHARS_BASE= Regex(ur'[A-Z]|[a-z]|[\u00C0-\u00D6]|[\u00D8-\u00F6]|'
-                     ur'[\u00F8-\u02FF]|[\u0370-\u037D]|[\u037F-\u1FFF]|'
-                     ur'[\u200C-\u200D]|[\u2070-\u218F]|[\u2C00-\u2FEF]|'
-                     ur'[\u3001-\uD7FF]|[\uF900-\uFDCF]|[\uFDF0-\uFFFD]|'
-                     ur'[\U00010000-\U000EFFFF]')
+PN_CHARS_BASE= Regex(r'[A-Z]|[a-z]|[\u00C0-\u00D6]|[\u00D8-\u00F6]|'
+                     r'[\u00F8-\u02FF]|[\u0370-\u037D]|[\u037F-\u1FFF]|'
+                     r'[\u200C-\u200D]|[\u2070-\u218F]|[\u2C00-\u2FEF]|'
+                     r'[\u3001-\uD7FF]|[\uF900-\uFDCF]|[\uFDF0-\uFFFD]|'
+                     r'[\U00010000-\U000EFFFF]')
 PN_CHARS_U = PN_CHARS_BASE | '_'
-PN_CHARS = PN_CHARS_U | '-' | Regex(ur'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u2040]')
+PN_CHARS = PN_CHARS_U | '-' | Regex(r'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u2040]')
 
 # NB: PN_PREFIX, PN_LOCAL and BLANK_NODE_LABEL are defined
 # in a slightly different way than in the SPARQL grammar,
@@ -124,7 +124,7 @@ ANON = Literal("[") + Literal("]")
 # other context-independant rules
 VARIABLE = Combine(
     Regex(r'[?$]') + ( PN_CHARS_U | Regex(r'[0-9]') )
-    +  ZeroOrMore(PN_CHARS_U | Regex(u'[0-9]|\u00B7|[\u0300-\u036F]|[\u203F-\u2040]'))
+    +  ZeroOrMore(PN_CHARS_U | Regex('[0-9]|\\u00B7|[\\u0300-\\u036F]|[\\u203F-\\u2040]'))
 )
 INDEX = Regex(r'-?[0-9]+')
 UNICITY_CONSTRAINT = Literal('!')
@@ -164,7 +164,7 @@ def parse_decimal(s, loc, toks):
 @DOUBLE.setParseAction
 def parse_double(s, loc, toks):
     # pylint: disable=C0111,W0613
-    return rdflib.Literal(u"".join(toks), datatype=rdflib.XSD.double)
+    return rdflib.Literal("".join(toks), datatype=rdflib.XSD.double)
 
 @BOOLEAN_LITERAL.setParseAction
 def parse_boolean(s, loc, toks):
@@ -200,10 +200,10 @@ def parse_slice(s, loc, toks):
 
 
 # unescaping
-IRI_ESCAPE_SEQ = regex(ur"\\u([0-9A-Fa-f]{4}) | \\U([0-9A-Fa-f]{8})", VERBOSE)
-LOCAL_ESCAPE_SEQ = regex(ur"\\([_~.\-!$&'()*+,;=/?#@%])", VERBOSE)
-STRING_ESCAPE_SEQ = regex(ur"\\u([0-9A-Fa-f]{4}) | \\U([0-9A-Fa-f]{8}) "
-                          ur" | \\([tbnrf\\\"'])", VERBOSE)
+IRI_ESCAPE_SEQ = regex(r"\\u([0-9A-Fa-f]{4}) | \\U([0-9A-Fa-f]{8})", VERBOSE)
+LOCAL_ESCAPE_SEQ = regex(r"\\([_~.\-!$&'()*+,;=/?#@%])", VERBOSE)
+STRING_ESCAPE_SEQ = regex(r"\\u([0-9A-Fa-f]{4}) | \\U([0-9A-Fa-f]{8}) "
+                          r" | \\([tbnrf\\\"'])", VERBOSE)
 STRING_UNESCAPE_MAP = { "t": "\t", "b": "\b", "n": "\n", "r": "\r", "f": "\f",
                         "\\": "\\", '"': '"', "'": "'" }
 
@@ -212,7 +212,7 @@ def unescape_iri(iri):
     def repl(match):
         """Replace match by the corresponding unicode character"""
         groups = match.groups()
-        return unichr(int(groups[0] or groups[1], 16))
+        return chr(int(groups[0] or groups[1], 16))
     return IRI_ESCAPE_SEQ.sub(repl, iri)
 
 def unescape_local_name(local):
@@ -227,7 +227,7 @@ def unescape_string(string):
         if groups[2]:
             return STRING_UNESCAPE_MAP[groups[2]]
         else:
-            return unichr(int(groups[0] or groups[1], 16))
+            return chr(int(groups[0] or groups[1], 16))
     return STRING_ESCAPE_SEQ.sub(repl, string)
 
 
@@ -403,7 +403,7 @@ class Parser(object):
         subj = rdflib.BNode()
         property_list = iter(toks)
         for pred in property_list:
-            objlist = property_list.next()
+            objlist = next(property_list)
             for obj in objlist:
                 add((subj, pred, obj))
         return subj
@@ -426,9 +426,9 @@ class Parser(object):
         graph = self.get_current_graph()
         add = graph.add
         property_list = iter(toks.asList())
-        subj = property_list.next()
+        subj = next(property_list)
         for pred in property_list:
-            objlist = property_list.next()
+            objlist = next(property_list)
             for obj in objlist:
                 add((subj, pred, obj))
         return []
@@ -468,7 +468,7 @@ class Parser(object):
             self.processor.add(
                 self.get_current_graph(clear=True, check_empty=True),
                 addnew=False)
-        except TypeError, ex:
+        except TypeError as ex:
             raise Exception(ex)
 
     def _do_add_new(self, s, loc, toks):
@@ -509,11 +509,11 @@ class Parser(object):
 
     def parseString(self, txt):
         """Parse txt as an LD Patch and apply it"""
-        if type(txt) is str:
+        if type(txt) is bytes:
             txt = txt.decode("utf8")
         try:
             self.grammar.parseString(txt, True)
-        except ParseException, ex:
+        except ParseException as ex:
             raise ParserError(ex)
 
 class ParserError(Exception):

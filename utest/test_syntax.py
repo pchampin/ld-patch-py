@@ -17,7 +17,7 @@
 #    You should have received a copy of the GNU Lesser General Public License
 #    along with LD-PATCH-PY.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import unicode_literals
+
 
 from nose.tools import assert_raises, assert_list_equal, eq_
 from unittest import skip

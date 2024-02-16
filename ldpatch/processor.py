@@ -137,8 +137,8 @@ class PatchProcessor(object):
             # so this is not stricly speaking a ParserError,
             # but rather a semantic error, hence its processing here
             try:
-                parse_iri(unicode(element), rule="IRI")
-            except ValueError, ex:
+                parse_iri(str(element), rule="IRI")
+            except ValueError as ex:
                 raise PatchEvalError(ex.message)
             ret = element
         else:
@@ -211,12 +211,12 @@ class PatchProcessor(object):
         try:
             for step in path:
                 nodeset = self.do_path_step(nodeset, step)
-        except NoUniqueMatchError, ex:
+        except NoUniqueMatchError as ex:
             ex.variable = variable
             raise
         if len(nodeset) != 1:
             raise NoUniqueMatchError(variable, "end", nodeset)
-        self._variables[variable] =  iter(nodeset).next()
+        self._variables[variable] =  next(iter(nodeset))
 
     def add(self, add_graph, addnew=False):
         """Process an Add or AnnNew command"""
@@ -352,7 +352,7 @@ class PatchProcessor(object):
                 target.add((spre, ppre, fst))
                 target.set((lst, RDF.rest, opost))
 
-        except UniquenessError, ex:
+        except UniquenessError as ex:
             raise MalformedListError(ex.msg)
 
 

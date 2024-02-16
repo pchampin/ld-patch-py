@@ -28,29 +28,29 @@ from sys import argv, path, stdin, stdout
 
 try:
     import ldpatch # unused import #pylint: disable=W0611
-except ImportError, ex:
+except ImportError as ex:
     try:
         SOURCE_DIR = dirname(dirname(abspath(__file__)))
-    except NameError, ex2:
+    except NameError as ex2:
         # __file__ is not define in py2exe, so raise ImportError anyway
         raise ex
     path.append(SOURCE_DIR)
     import ldpatch
 
 if len(argv) not in (2, 3) or "--help" in argv:
-    print "usage: %s <patch-file> [<base-iri>]" % argv[0]
-    print "  Reads a Turtle file from stdin,"
-    print "  applies it LD-Patch from <patch-file>,"
-    print "  and outputs the resulting graph in Turtle on stdout."
-    print "  Relative URIs in the patch are resolved against <base-iri> if provided,"
-    print "  otherwise agains the URI of the patch itself."
+    print("usage: %s <patch-file> [<base-iri>]" % argv[0])
+    print("  Reads a Turtle file from stdin,")
+    print("  applies it LD-Patch from <patch-file>,")
+    print("  and outputs the resulting graph in Turtle on stdout.")
+    print("  Relative URIs in the patch are resolved against <base-iri> if provided,")
+    print("  otherwise agains the URI of the patch itself.")
     exit(-1)
 
 from rdflib import Graph
 from ldpatch import apply as ldpatch_apply
 
 g = Graph()
-g.load(stdin, format="turtle")
+g.parse(stdin, format="turtle")
 
 if len(argv) == 3:
     baseiri = argv[2]
@@ -60,4 +60,4 @@ else:
 with open(argv[1]) as f:
     ldpatch_apply(f, g, baseiri)
 
-g.serialize(stdout, format="turtle")
+g.serialize(stdout.buffer, format="turtle")

@@ -26,7 +26,7 @@ The test suite can be downloaded from
 """
 from os.path import abspath, dirname, exists, join
 from unittest import skip, TestCase
-from urllib import pathname2url, urlopen
+from urllib.request import pathname2url, urlopen
 
 from rdflib import Graph, Namespace, RDF, URIRef
 from rdflib.collection import Collection
@@ -95,7 +95,7 @@ if exists(TESTSUITE_PATH):
         for entry in entries:
             etype = get_value(entry, RDF.type)
             approval = get_value(entry, RDFT.approval, default=RDFT.Approved)
-            name = unicode(get_value(entry, MF.name))
+            name = str(get_value(entry, MF.name))
             # /!\ variables assigned in the loop can not be safely used
             # inside the function (as they will all inherit the *last*
             # value of those variables, so 'entry' is passed as a default
@@ -120,7 +120,7 @@ if exists(TESTSUITE_PATH):
                     parser = Parser(DummyProcessor(), action, True)
                     try:
                         parser.parseString(patch)
-                    except ParserError, ex:
+                    except ParserError as ex:
                         assert False, "{} in <{}>".format(ex, action)
             elif etype == NS.NegativeSyntaxTest:
                 def test_X(self, entry=entry):
@@ -147,7 +147,7 @@ if exists(TESTSUITE_PATH):
                     parser = Parser(processor, base_iri, True)
                     try:
                         parser.parseString(patch)
-                    except ParserError, ex:
+                    except ParserError as ex:
                         raise Exception("ParseError: {}\n  in <{}>".format(
                             ex.message,
                             patch_iri
@@ -174,7 +174,7 @@ if exists(TESTSUITE_PATH):
                         assert False, 'expected PatchEvalError in <{}>'.format(
                             patch_iri
                         )
-                    except PatchEvalError, ex:
+                    except PatchEvalError as ex:
                         assert ex.statusCode == statusCode, \
                             "Expected statusCode {}, got {}".format(
                                 statusCode, ex.statusCode)
